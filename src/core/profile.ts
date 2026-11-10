@@ -80,22 +80,4 @@ export function isValidPincode(input: string): boolean {
   return /^[1-9]\d{5}$/.test(input.trim());
 }
 
-const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
-
-export function isValidDob(input: string): boolean {
-  const match = ISO_DATE_RE.exec(input.trim());
-  if (!match) {
-    return false;
-  }
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-
-  // The form's own DOB regex only accepts years starting 19 or 20 (docs/04-field-map.md).
-  if (year < 1900 || year > 2099) {
-    return false;
-  }
-
-  const date = new Date(year, month - 1, day);
-  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
-}
+export { isValidIsoDate as isValidDob } from './date';

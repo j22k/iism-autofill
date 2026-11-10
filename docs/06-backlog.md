@@ -9,7 +9,7 @@ Format: `- [ ] T-ID title — acceptance criteria`. Tick when `npm run verify` i
 
 ## Phase 1 — Core logic (pure, TDD)
 - [x] T-010 `profile.ts` types + validators (phone normalize, email, pincode, DOB) — table-driven tests incl. `+91 98765-43210 → 9876543210`. — DONE 2026-11-10: 42 tests. Reviewed; fixed a doc-vs-code mismatch (mobile/email now under `contact.*` matching the field map, not `address.*`), tightened `normalizePhone`/`isValidPincode` to reject results that don't look like real numbers (leading-zero mobile, leading-zero PIN), added DOB inclusive-boundary tests.
-- [ ] T-011 `dateFormat.ts` ISO → `dd/MM/yyyy`, rejects impossible dates.
+- [x] T-011 `dateFormat.ts` ISO → `dd/MM/yyyy`, rejects impossible dates. — DONE 2026-11-10: `isoToFormDate`, 13 tests. Reviewed; extracted shared `isValidIsoDate` into new `src/core/date.ts` so `dateFormat.ts` and `profile.ts` both depend on it instead of `dateFormat.ts` reaching into the domain-model module.
 - [ ] T-012 `match.ts` dropdown matching exact → ci → fuzzy; returns `{status: matched|ambiguous|none}`.
 - [ ] T-013 `image.ts` validate type/size; compress to ≤ 500 KB (canvas mocked in unit, real in e2e).
 - [ ] T-014 `fieldMap.ts` from verified map + selector fallbacks (`#id`, `[name$=id]`, label).
