@@ -42,7 +42,7 @@ Site: ASP.NET WebForms. IDs below are exact (including misspellings). **No `ctl0
 - Reload ≈ 0.6 s normally; slower on busy days. Text/select/checkbox survive; files don't.
 - Recommended order: Course → (Level, Schedule, State) → text/selects/declaration → DOB → files.
 - Client validation `Page_ClientValidate('sv')` demands guardian signature even for adults.
-- Upload constraints: JPG/JPEG/PNG, non-empty, ≤ 500 KB.
+- Upload constraints: non-empty, ≤ 500 KB. Types per field — see "Verified details" below (not simply JPG/JPEG/PNG; GIF and, for most fields, PDF are also accepted by the site).
 - Mobile verification is a one-time step before the form (user does this manually).
 - Full batch ⇒ "Seat Not Available" on submit; not our concern (we never submit).
 

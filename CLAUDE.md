@@ -34,7 +34,7 @@ page that mimics the ASP.NET WebForms postback behavior), ESLint + Prettier. No 
 - Text, dropdowns, checkbox survive reloads; **file inputs do not**. Upload files only after the last reload.
 - Wait for reload completion (poll `document.readyState` + value stability) — never fixed `sleep`.
 - Setting `.value` is not enough: dispatch `input` and `change` events; for postback fields use the page's own onchange.
-- Uploads: JPG/JPEG/PNG (docs may also be PDF; photo/signatures not), ≤ 500 KB each (page JS only blocks >1 MB; stay at 500 KB), non-empty. Compress/validate in the extension before attach (DataTransfer API).
+- Uploads: JPG/JPEG/PNG/GIF (docs may also be PDF; photo/signature/guardian-signature not — see docs/04-field-map.md's verified details), ≤ 500 KB each (page JS only blocks >1 MB; stay at 500 KB), non-empty. Compress/validate in the extension before attach (DataTransfer API).
 - Site has intentionally misspelled IDs (`Eduation`, `Phototo`, `Appicant`); match exactly.
 - DOB format `dd/MM/yyyy`. Changing `ddlScheduleCourse` clears DOB.
 

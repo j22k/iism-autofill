@@ -1,0 +1,82 @@
+// "500 KB" read conservatively as decimal kilobytes (500_000 bytes), not binary
+// (512_000) — the server's actual limit is unconfirmed (docs/04-field-map.md notes the
+// page's own JS only blocks >1 MB), so we stay under the stricter reading.
+export const MAX_IMAGE_BYTES = 500_000;
+
+// docs/04-field-map.md's "Verified details from the real HTML" section (the
+// fixture-backed, Hard-Rule-6 source of truth) documents photo/signature/guardian-
+// signature uploads as accepting gif/jpg/png/jpeg — the doc's own earlier summary line
+// omits GIF, but that summary isn't the verified source. GIF decodes fine via
+// createImageBitmap/drawImage (first frame only, which is correct for a static photo),
+// so there's no technical reason to exclude it.
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/gif']);
+
+export interface ImageValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
+export function validateImage(file: { type: string; size: number }): ImageValidationResult {
+  const errors: string[] = [];
+  if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+    errors.push(`Unsupported file type "${file.type}" — only JPG, PNG, and GIF are allowed.`);
+  }
+  if (file.size === 0) {
+    errors.push('File is empty.');
+  } else if (file.size > MAX_IMAGE_BYTES) {
+    errors.push(`File is ${Math.ceil(file.size / 1000)} KB — must be ${MAX_IMAGE_BYTES / 1000} KB or smaller.`);
+  }
+  return { valid: errors.length === 0, errors };
+}
+
+export type Encoder = (quality: number, scale: number) => Promise<Blob>;
+
+export interface CompressResult {
+  blob: Blob;
+  withinLimit: boolean;
+}
+
+const QUALITY_SEARCH_ITERATIONS = 8;
+const DOWNSCALE_ITERATIONS = 10;
+const DOWNSCALE_FACTOR = 0.8;
+const DOWNSCALE_QUALITY = 0.8;
+
+// Per docs/03-architecture.md: canvas re-encode, binary-search quality (at full scale)
+// first; if even the lowest quality can't fit, downscale (at a fixed quality) until it
+// does. `encode` is the only thing that touches a real canvas — real in the browser,
+// mocked with a deterministic size model in unit tests.
+export async function compressImage(encode: Encoder, maxBytes: number): Promise<CompressResult> {
+  let best: Blob | null = null;
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < QUALITY_SEARCH_ITERATIONS; i++) {
+    const quality = (lo + hi) / 2;
+    const blob = await encode(quality, 1);
+    if (blob.size <= maxBytes) {
+      best = blob;
+      lo = quality;
+    } else {
+      hi = quality;
+    }
+  }
+  if (best) {
+    return { blob: best, withinLimit: true };
+  }
+
+  let smallest = await encode(0, 1);
+  if (smallest.size <= maxBytes) {
+    return { blob: smallest, withinLimit: true };
+  }
+  let scale = 1;
+  for (let i = 0; i < DOWNSCALE_ITERATIONS; i++) {
+    scale *= DOWNSCALE_FACTOR;
+    const blob = await encode(DOWNSCALE_QUALITY, scale);
+    if (blob.size < smallest.size) {
+      smallest = blob;
+    }
+    if (blob.size <= maxBytes) {
+      return { blob, withinLimit: true };
+    }
+  }
+  return { blob: smallest, withinLimit: false };
+}
