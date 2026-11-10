@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+.env*
+*.local
+# personal data — never commit
+profiles/
+*.profile.json
+tests/private/
+.claude/settings.local.json

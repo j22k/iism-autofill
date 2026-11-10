@@ -1,0 +1,34 @@
+{
+  "name": "iism-form-filler",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Personal Chrome extension that autofills the IISM Gulmarg admission form from a local profile. Never submits.",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "vite build && esbuild src/background/service-worker.ts --bundle --format=esm --target=es2022 --outfile=dist/background/service-worker.js && esbuild src/content/index.ts --bundle --format=iife --target=es2022 --outfile=dist/content/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings=0",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@playwright/test": "^1.49.1",
+    "@types/chrome": "^0.0.287",
+    "@types/node": "^22.10.2",
+    "@typescript-eslint/eslint-plugin": "^8.18.1",
+    "@typescript-eslint/parser": "^8.18.1",
+    "@vitest/coverage-v8": "^5.1.0",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^9.1.0",
+    "esbuild": "^0.25.12",
+    "jsdom": "^25.0.1",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.6",
+    "vite-plugin-static-copy": "^2.2.0",
+    "vitest": "^5.1.0"
+  }
+}
