@@ -38,6 +38,7 @@ States: `IDLE → PREFLIGHT → COURSE → SCHEDULE_STATE → FIELDS → DOB →
 ## Testing strategy
 - Unit: core modules (target ≥ 90% coverage on `src/core`).
 - Integration: jsdom for dom.ts helpers.
+- IndexedDB (`src/shared/db.ts`): `fake-indexeddb/auto` polyfills it under jsdom. Build test Blobs from `node:buffer`'s `Blob`, not the ambient jsdom global `Blob` — fake-indexeddb's structured-clone doesn't recognize jsdom's Blob and silently drops `.type`/`.size` on round-trip. Shared helper: `tests/unit/shared/testBlob.ts`.
 - E2E: Playwright loads unpacked extension, opens local fixture served at a fake origin via route interception for `admission.iismgulmarg.in`, asserts final DOM, that `btnSubmit` was never clicked, and that no network requests left localhost.
 - Manual: real-form smoke test using the checklist in `docs/05-test-plan.md` (never submit).
 
