@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   EDITABLE_FIELDS,
   FIELD_MAP,
+  FILE_FIELDS,
   getByPath,
   getFieldById,
   getFieldBySource,
@@ -113,6 +114,47 @@ describe('EDITABLE_FIELDS', () => {
   it('is exactly FIELD_MAP minus file/readonly entries', () => {
     const expectedCount = FIELD_MAP.filter((f) => f.kind !== 'file' && f.kind !== 'readonly').length;
     expect(EDITABLE_FIELDS).toHaveLength(expectedCount);
+  });
+});
+
+describe('FILE_FIELDS', () => {
+  it('has exactly 8 entries, all kind:file with a docs.* source', () => {
+    expect(FILE_FIELDS).toHaveLength(8);
+    for (const field of FILE_FIELDS) {
+      expect(field.kind).toBe('file');
+      expect(field.source).toMatch(/^docs\./);
+    }
+  });
+
+  it('matches FIELD_MAP\'s full set of file-kind entries', () => {
+    const expectedIds = FIELD_MAP.filter((f) => f.kind === 'file')
+      .map((f) => f.id)
+      .sort();
+    expect(FILE_FIELDS.map((f) => f.id).sort()).toEqual(expectedIds);
+  });
+
+  it('includes both required and optional docs', () => {
+    expect(FILE_FIELDS.some((f) => f.id === 'FupPhototOfApplicant' && f.required)).toBe(true);
+    expect(FILE_FIELDS.some((f) => f.id === 'FupDomicileAttachProof' && !f.required)).toBe(true);
+  });
+
+  it("gives photo/signature/guardian-signature an image-only acceptedTypes (no PDF, per docs/04-field-map.md)", () => {
+    for (const id of ['FupPhototOfApplicant', 'FupSignatureOfAppicant', 'FupParentGuardianSignature']) {
+      expect(getFieldById(id)?.acceptedTypes?.has('application/pdf')).toBe(false);
+      expect(getFieldById(id)?.acceptedTypes?.has('image/png')).toBe(true);
+    }
+  });
+
+  it('gives birth/education/domicile/adventure/employment uploads PDF in their acceptedTypes', () => {
+    for (const id of [
+      'FupBirthCertificate',
+      'FupEducationQualification',
+      'FupDomicileAttachProof',
+      'FupAnyAdventureCoursePhoto',
+      'FupCurrentEmployment',
+    ]) {
+      expect(getFieldById(id)?.acceptedTypes?.has('application/pdf')).toBe(true);
+    }
   });
 });
 

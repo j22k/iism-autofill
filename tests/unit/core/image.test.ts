@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { compressImage, MAX_IMAGE_BYTES, validateImage } from '../../../src/core/image';
+import { compressImage, DOCUMENT_TYPES, MAX_IMAGE_BYTES, validateImage } from '../../../src/core/image';
 
 describe('validateImage', () => {
   it('accepts a valid jpeg under the size limit', () => {
@@ -36,6 +36,24 @@ describe('validateImage', () => {
 
   it('accepts a gif per the fixture-verified field map (docs/04-field-map.md)', () => {
     expect(validateImage({ type: 'image/gif', size: 100_000 })).toEqual({ valid: true, errors: [] });
+  });
+
+  it('rejects PDF by default (photo/signature/guardian-signature fields never accept it)', () => {
+    const result = validateImage({ type: 'application/pdf', size: 100_000 });
+    expect(result.valid).toBe(false);
+  });
+
+  it('accepts PDF when given DOCUMENT_TYPES (birth/education/domicile/adventure/employment fields)', () => {
+    expect(validateImage({ type: 'application/pdf', size: 100_000 }, DOCUMENT_TYPES)).toEqual({
+      valid: true,
+      errors: [],
+    });
+  });
+
+  it('still rejects an unsupported type against DOCUMENT_TYPES', () => {
+    const result = validateImage({ type: 'image/webp', size: 100_000 }, DOCUMENT_TYPES);
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain('PDF');
   });
 });
 

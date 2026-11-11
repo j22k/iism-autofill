@@ -1,16 +1,12 @@
 // Profile editor: autosave + inline validation (A1-A3), clear-all (A7). Document
 // upload UI (B1-B3) is a separate module, added in T-022.
 import { EDITABLE_FIELDS, getByPath, groupFieldsBySection, setByPath, type FieldDef } from '../core/fieldMap';
-import { humanize } from '../core/labels';
+import { labelForPath } from '../core/labels';
 import { createEmptyProfile, mergeProfile } from '../core/profile';
 import { validateProfile } from '../core/profileValidation';
 import { clearAll, loadProfile, saveProfile } from '../shared/storage';
 
 const AUTOSAVE_DEBOUNCE_MS = 500;
-
-function labelFor(path: string): string {
-  return humanize(path.split('.').pop() ?? path);
-}
 
 export async function initOptionsPage(root: HTMLElement): Promise<void> {
   const profile = mergeProfile(createEmptyProfile(), await loadProfile());
@@ -61,7 +57,7 @@ export async function initOptionsPage(root: HTMLElement): Promise<void> {
 
     const label = document.createElement('label');
     label.htmlFor = inputId;
-    label.textContent = labelFor(path);
+    label.textContent = labelForPath(path);
     wrapper.appendChild(label);
 
     const input = document.createElement('input');

@@ -5,21 +5,46 @@ export const MAX_IMAGE_BYTES = 500_000;
 
 // docs/04-field-map.md's "Verified details from the real HTML" section (the
 // fixture-backed, Hard-Rule-6 source of truth) documents photo/signature/guardian-
-// signature uploads as accepting gif/jpg/png/jpeg — the doc's own earlier summary line
-// omits GIF, but that summary isn't the verified source. GIF decodes fine via
-// createImageBitmap/drawImage (first frame only, which is correct for a static photo),
-// so there's no technical reason to exclude it.
-const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/gif']);
+// signature uploads as accepting gif/jpg/png/jpeg only (no PDF) — the doc's own earlier
+// summary line omits GIF, but that summary isn't the verified source. GIF decodes fine
+// via createImageBitmap/drawImage (first frame only, which is correct for a static
+// photo), so there's no technical reason to exclude it.
+export const IMAGE_TYPES: ReadonlySet<string> = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/gif']);
+
+// The same doc section: birth certificate/education/domicile/adventure/employment
+// uploads additionally accept PDF. Each FIELD_MAP file entry's `acceptedTypes` picks
+// between this and IMAGE_TYPES per field — see src/core/fieldMap.ts.
+export const DOCUMENT_TYPES: ReadonlySet<string> = new Set([...IMAGE_TYPES, 'application/pdf']);
+
+const TYPE_LABELS: Record<string, string> = {
+  'image/jpeg': 'JPG',
+  'image/jpg': 'JPG',
+  'image/png': 'PNG',
+  'image/gif': 'GIF',
+  'application/pdf': 'PDF',
+};
+
+function describeTypes(types: ReadonlySet<string>): string {
+  const labels = [...new Set([...types].map((type) => TYPE_LABELS[type] ?? type))];
+  if (labels.length <= 1) {
+    return labels[0] ?? '';
+  }
+  const last = labels[labels.length - 1];
+  return `${labels.slice(0, -1).join(', ')}${labels.length > 2 ? ',' : ''} and ${last}`;
+}
 
 export interface ImageValidationResult {
   valid: boolean;
   errors: string[];
 }
 
-export function validateImage(file: { type: string; size: number }): ImageValidationResult {
+export function validateImage(
+  file: { type: string; size: number },
+  acceptedTypes: ReadonlySet<string> = IMAGE_TYPES,
+): ImageValidationResult {
   const errors: string[] = [];
-  if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-    errors.push(`Unsupported file type "${file.type}" — only JPG, PNG, and GIF are allowed.`);
+  if (!acceptedTypes.has(file.type)) {
+    errors.push(`Unsupported file type "${file.type}" — only ${describeTypes(acceptedTypes)} are allowed.`);
   }
   if (file.size === 0) {
     errors.push('File is empty.');

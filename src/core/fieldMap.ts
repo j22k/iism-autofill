@@ -1,3 +1,5 @@
+import { DOCUMENT_TYPES, IMAGE_TYPES } from './image';
+
 export type FieldKind = 'select' | 'text' | 'checkbox' | 'file' | 'readonly';
 
 export interface FieldDef {
@@ -23,6 +25,10 @@ export interface FieldDef {
   // field. Label-based lookup is a dynamic DOM query (label[for="id"]) done at fill
   // time (T-030), not static data.
   selectors: readonly string[];
+  // Only set for kind: 'file'. docs/04-field-map.md's verified details: birth
+  // certificate/education/domicile/adventure/employment uploads accept PDF in addition
+  // to images; photo/signature/guardian-signature do not (no PDF).
+  acceptedTypes?: ReadonlySet<string>;
 }
 
 // A third tier, [name="id"] (exact match), is inserted ahead of the [name$="id"]
@@ -55,8 +61,8 @@ export const FIELD_MAP: readonly FieldDef[] = [
   field({ id: 'txtNationality', section: 'Basic', kind: 'text', postback: false, required: true, source: 'personal.nationality' }),
   field({ id: 'txtDateOfBirth', section: 'Basic', kind: 'text', postback: true, required: true, source: 'personal.dob' }),
   field({ id: 'txtDomicile', section: 'Basic', kind: 'text', postback: false, required: false, source: 'personal.domicile' }),
-  field({ id: 'FupBirthCertificate', section: 'Basic', kind: 'file', postback: false, required: true, source: 'docs.dobProof' }),
-  field({ id: 'FupDomicileAttachProof', section: 'Basic', kind: 'file', postback: false, required: false, source: 'docs.domicileProof' }),
+  field({ id: 'FupBirthCertificate', section: 'Basic', kind: 'file', postback: false, required: true, source: 'docs.dobProof', acceptedTypes: DOCUMENT_TYPES }),
+  field({ id: 'FupDomicileAttachProof', section: 'Basic', kind: 'file', postback: false, required: false, source: 'docs.domicileProof', acceptedTypes: DOCUMENT_TYPES }),
 
   // Address
   field({ id: 'txtHouseNoApartment', section: 'Address', kind: 'text', postback: false, required: true, source: 'address.house' }),
@@ -68,9 +74,9 @@ export const FIELD_MAP: readonly FieldDef[] = [
 
   // Academic
   field({ id: 'ddlEduationQualification', section: 'Academic', kind: 'select', postback: false, required: true, source: 'education.qualification' }),
-  field({ id: 'FupEducationQualification', section: 'Academic', kind: 'file', postback: false, required: true, source: 'docs.educationProof' }),
-  field({ id: 'FupAnyAdventureCoursePhoto', section: 'Academic', kind: 'file', postback: false, required: false, source: 'docs.adventureCert' }),
-  field({ id: 'FupCurrentEmployment', section: 'Academic', kind: 'file', postback: false, required: false, source: 'docs.employmentProof' }),
+  field({ id: 'FupEducationQualification', section: 'Academic', kind: 'file', postback: false, required: true, source: 'docs.educationProof', acceptedTypes: DOCUMENT_TYPES }),
+  field({ id: 'FupAnyAdventureCoursePhoto', section: 'Academic', kind: 'file', postback: false, required: false, source: 'docs.adventureCert', acceptedTypes: DOCUMENT_TYPES }),
+  field({ id: 'FupCurrentEmployment', section: 'Academic', kind: 'file', postback: false, required: false, source: 'docs.employmentProof', acceptedTypes: DOCUMENT_TYPES }),
 
   // ID
   field({ id: 'ddlVegetarianOrNon', section: 'ID', kind: 'select', postback: false, required: false, source: 'medical.diet' }),
@@ -82,13 +88,13 @@ export const FIELD_MAP: readonly FieldDef[] = [
   field({ id: 'txtShoeSize', section: 'ID', kind: 'text', postback: false, required: false, source: 'medical.shoeSize' }),
 
   // Photo
-  field({ id: 'FupPhototOfApplicant', section: 'Photo', kind: 'file', postback: false, required: true, source: 'docs.photo' }),
-  field({ id: 'FupSignatureOfAppicant', section: 'Photo', kind: 'file', postback: false, required: true, source: 'docs.signature' }),
+  field({ id: 'FupPhototOfApplicant', section: 'Photo', kind: 'file', postback: false, required: true, source: 'docs.photo', acceptedTypes: IMAGE_TYPES }),
+  field({ id: 'FupSignatureOfAppicant', section: 'Photo', kind: 'file', postback: false, required: true, source: 'docs.signature', acceptedTypes: IMAGE_TYPES }),
 
   // Indemnity
   field({ id: 'txtEmergencyContactName', section: 'Indemnity', kind: 'text', postback: false, required: true, source: 'emergency.name' }),
   field({ id: 'txtEmergencyContactPhone', section: 'Indemnity', kind: 'text', postback: false, required: true, source: 'emergency.phone' }),
-  field({ id: 'FupParentGuardianSignature', section: 'Indemnity', kind: 'file', postback: false, required: true, source: 'docs.guardianSignature' }),
+  field({ id: 'FupParentGuardianSignature', section: 'Indemnity', kind: 'file', postback: false, required: true, source: 'docs.guardianSignature', acceptedTypes: IMAGE_TYPES }),
 
   // Declaration
   // required:false here is an unverified default, not doc-confirmed: docs/04-field-map.md's
@@ -104,6 +110,17 @@ export function isEditableField(def: FieldDef): def is FieldDef & { source: stri
 }
 
 export const EDITABLE_FIELDS: ReadonlyArray<FieldDef & { source: string }> = FIELD_MAP.filter(isEditableField);
+
+// Every file-kind field has a non-null docs.* source (pinned by the "only gives a null
+// source to readonly fields" test below) and an acceptedTypes set (every file entry
+// above passes one), so this filter's result type can assert both directly rather than
+// re-deriving a narrower FieldDef type.
+function isFileField(def: FieldDef): def is FieldDef & { source: string; acceptedTypes: ReadonlySet<string> } {
+  return def.kind === 'file';
+}
+
+export const FILE_FIELDS: ReadonlyArray<FieldDef & { source: string; acceptedTypes: ReadonlySet<string> }> =
+  FIELD_MAP.filter(isFileField);
 
 // Groups fields by their `section`, preserving each section's first-appearance order
 // and each field's original order within its section (used to render the options page
