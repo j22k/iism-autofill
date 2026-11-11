@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { isValidDob, isValidEmail, isValidPincode, normalizePhone } from '../../../src/core/profile';
+import {
+  createEmptyProfile,
+  isValidDob,
+  isValidEmail,
+  isValidPincode,
+  mergeProfile,
+  normalizePhone,
+  type Profile,
+} from '../../../src/core/profile';
 
 describe('normalizePhone', () => {
   const cases: Array<[string, string | null]> = [
@@ -80,4 +88,63 @@ describe('isValidDob', () => {
       expect(isValidDob(input)).toBe(expected);
     });
   }
+});
+
+describe('createEmptyProfile', () => {
+  it('returns every leaf as an empty string and declaration.agree as false', () => {
+    expect(createEmptyProfile()).toEqual({
+      course: { type: '', level: '', batch: '', state: '' },
+      personal: { name: '', fatherName: '', nationality: '', dob: '', domicile: '' },
+      address: { house: '', street: '', city: '', pincode: '' },
+      contact: { mobile: '', email: '' },
+      education: { qualification: '' },
+      medical: { diet: '', bloodGroup: '', category: '', height: '', weight: '', waist: '', shoeSize: '' },
+      emergency: { name: '', phone: '' },
+      declaration: { agree: false },
+    });
+  });
+});
+
+describe('mergeProfile', () => {
+  const empty = createEmptyProfile();
+
+  it('returns the base profile unchanged when nothing was loaded', () => {
+    expect(mergeProfile(empty, null)).toEqual(empty);
+  });
+
+  it('passes a fully-populated loaded profile through untouched', () => {
+    const full: Profile = {
+      course: { type: 'Ski', level: 'Basic', batch: 'Jan-2026', state: 'JAMMU AND KASHMIR' },
+      personal: {
+        name: 'Test Name',
+        fatherName: 'Father Name',
+        nationality: 'Indian',
+        dob: '2005-06-15',
+        domicile: 'Testville',
+      },
+      address: { house: 'H.No. 1', street: 'Main St', city: 'Testville', pincode: '560001' },
+      contact: { mobile: '9876543210', email: 'test@example.com' },
+      education: { qualification: 'Graduation' },
+      medical: {
+        diet: 'Vegetarian',
+        bloodGroup: 'O+',
+        category: 'General',
+        height: '170',
+        weight: '60',
+        waist: '30',
+        shoeSize: '9',
+      },
+      emergency: { name: 'Emergency Contact', phone: '9876543211' },
+      declaration: { agree: true },
+    };
+    expect(mergeProfile(empty, full)).toEqual(full);
+  });
+
+  it('fills missing leaves from the base profile instead of leaving them undefined', () => {
+    const partial = { personal: { name: 'Test Name' } } as unknown as Partial<Profile>;
+    const merged = mergeProfile(empty, partial);
+    expect(merged.personal.name).toBe('Test Name');
+    expect(merged.personal.fatherName).toBe('');
+    expect(merged.contact).toEqual(empty.contact);
+  });
 });

@@ -81,3 +81,37 @@ export function isValidPincode(input: string): boolean {
 }
 
 export { isValidIsoDate as isValidDob } from './date';
+
+export function createEmptyProfile(): Profile {
+  return {
+    course: { type: '', level: '', batch: '', state: '' },
+    personal: { name: '', fatherName: '', nationality: '', dob: '', domicile: '' },
+    address: { house: '', street: '', city: '', pincode: '' },
+    contact: { mobile: '', email: '' },
+    education: { qualification: '' },
+    medical: { diet: '', bloodGroup: '', category: '', height: '', weight: '', waist: '', shoeSize: '' },
+    emergency: { name: '', phone: '' },
+    declaration: { agree: false },
+  };
+}
+
+// Fills any leaf missing from `loaded` with the corresponding leaf from `base`, so a
+// stale/incomplete stored profile (e.g. an older schema missing a since-added field)
+// never surfaces as `undefined` to code that expects every Profile leaf to be a string.
+// This is deliberately NOT a type/shape validator — it trusts `loaded`'s existing leaves
+// as-is and only patches gaps.
+export function mergeProfile(base: Profile, loaded: Partial<Profile> | null): Profile {
+  if (!loaded) {
+    return base;
+  }
+  return {
+    course: { ...base.course, ...loaded.course },
+    personal: { ...base.personal, ...loaded.personal },
+    address: { ...base.address, ...loaded.address },
+    contact: { ...base.contact, ...loaded.contact },
+    education: { ...base.education, ...loaded.education },
+    medical: { ...base.medical, ...loaded.medical },
+    emergency: { ...base.emergency, ...loaded.emergency },
+    declaration: { ...base.declaration, ...loaded.declaration },
+  };
+}

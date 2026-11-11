@@ -97,6 +97,27 @@ export const FIELD_MAP: readonly FieldDef[] = [
   field({ id: 'chkIAgree', section: 'Declaration', kind: 'checkbox', postback: false, required: false, source: 'declaration.agree' }),
 ];
 
+// A field the options page can render as an input: not a file upload (T-022's job),
+// not a readonly/computed display field, and not missing a Profile path to bind to.
+export function isEditableField(def: FieldDef): def is FieldDef & { source: string } {
+  return def.kind !== 'file' && def.kind !== 'readonly' && def.source !== null;
+}
+
+export const EDITABLE_FIELDS: ReadonlyArray<FieldDef & { source: string }> = FIELD_MAP.filter(isEditableField);
+
+// Groups fields by their `section`, preserving each section's first-appearance order
+// and each field's original order within its section (used to render the options page
+// as one `<fieldset>` per site section).
+export function groupFieldsBySection<T extends { section: string }>(fields: readonly T[]): Array<[string, T[]]> {
+  const map = new Map<string, T[]>();
+  for (const def of fields) {
+    const list = map.get(def.section) ?? [];
+    list.push(def);
+    map.set(def.section, list);
+  }
+  return [...map];
+}
+
 export function getFieldById(id: string): FieldDef | undefined {
   return FIELD_MAP.find((entry) => entry.id === id);
 }
@@ -114,4 +135,26 @@ export function getByPath(source: object, path: string): unknown {
     current = (current as Record<string, unknown>)[key];
   }
   return current;
+}
+
+// Writes through a dotted path into an existing object graph (e.g. a Profile draft).
+// Every FIELD_MAP source resolves to a leaf that's always at least one level deep
+// (section.leaf), so the last segment is always a plain assignment onto an object that
+// already exists on the target — this never needs to create intermediate objects.
+export function setByPath(target: object, path: string, value: unknown): void {
+  const segments = path.split('.');
+  const lastSegment = segments.pop();
+  if (lastSegment === undefined) {
+    return;
+  }
+  let current: unknown = target;
+  for (const key of segments) {
+    if (typeof current !== 'object' || current === null) {
+      return;
+    }
+    current = (current as Record<string, unknown>)[key];
+  }
+  if (typeof current === 'object' && current !== null) {
+    (current as Record<string, unknown>)[lastSegment] = value;
+  }
 }
