@@ -6,6 +6,7 @@ import {
   isValidPincode,
   mergeProfile,
   normalizePhone,
+  profileDisplayName,
   type Profile,
 } from '../../../src/core/profile';
 
@@ -146,5 +147,21 @@ describe('mergeProfile', () => {
     expect(merged.personal.name).toBe('Test Name');
     expect(merged.personal.fatherName).toBe('');
     expect(merged.contact).toEqual(empty.contact);
+  });
+});
+
+describe('profileDisplayName', () => {
+  it('returns a placeholder when there is no profile', () => {
+    expect(profileDisplayName(null)).toBe('No profile saved yet');
+  });
+
+  it("returns the profile's name when set", () => {
+    const profile = createEmptyProfile();
+    profile.personal.name = 'Test Name';
+    expect(profileDisplayName(profile)).toBe('Test Name');
+  });
+
+  it('falls back to a placeholder when the profile has no name yet', () => {
+    expect(profileDisplayName(createEmptyProfile())).toBe('Unnamed profile');
   });
 });

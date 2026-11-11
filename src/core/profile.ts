@@ -115,3 +115,11 @@ export function mergeProfile(base: Profile, loaded: Partial<Profile> | null): Pr
     declaration: { ...base.declaration, ...loaded.declaration },
   };
 }
+
+// Used by the side panel's profile dropdown (T-023) to label the one stored profile.
+export function profileDisplayName(profile: Profile | null): string {
+  if (!profile) {
+    return 'No profile saved yet';
+  }
+  return profile.personal.name || 'Unnamed profile';
+}
