@@ -1,9 +1,11 @@
 // Side panel shell (E1, C1): page-detected status, profile dropdown, Autofill/Reset
 // buttons. T-032 wires Autofill to a real fill run (C2-C6) via START_FILL/RUN_STATUS
-// (src/shared/messages.ts) — the structured per-field report display is T-033's job
-// (C7); this only shows the run's phase and, on failure, its message. Reset stays a
-// real, present, honestly-disabled control until T-034 (C8).
+// (src/shared/messages.ts); T-033 adds the structured per-field report (C7) — a summary
+// line plus one row per field, shown on both a completed run and a failed one's partial
+// progress. Reset stays a real, present, honestly-disabled control until T-034 (C8).
 import { isAdmissionUrl } from '../core/pageDetect';
+import { formatSummary, labelForStepId, summarizeReport } from '../core/fillReport';
+import type { StepReport } from '../core/fillRun';
 import { createEmptyProfile, mergeProfile, profileDisplayName } from '../core/profile';
 import { loadProfile } from '../shared/storage';
 import type { BackgroundToSidePanelMessage, StartFillMessage } from '../shared/messages';
@@ -73,7 +75,31 @@ export async function initSidePanel(root: HTMLElement): Promise<void> {
 
   const fillStatus = document.createElement('p');
   fillStatus.dataset.role = 'fill-status';
+  // A screen-reader user may well have the panel open from before the run started —
+  // role="status"/aria-live announces the summary the moment it changes, instead of
+  // requiring them to know to go re-read the panel after a run finishes.
+  fillStatus.setAttribute('role', 'status');
+  fillStatus.setAttribute('aria-live', 'polite');
   root.appendChild(fillStatus);
+
+  const fillReport = document.createElement('ul');
+  fillReport.dataset.role = 'fill-report';
+  root.appendChild(fillReport);
+
+  // Per-field detail (C7) — shown alongside the one-line summary on both a completed run
+  // and a failed one's partial progress; cleared while a run is in progress or hasn't
+  // started yet, so a stale report never lingers under a fresh "Running…".
+  function renderReport(report: readonly StepReport[]): void {
+    fillReport.innerHTML = '';
+    for (const entry of report) {
+      const item = document.createElement('li');
+      item.dataset.fieldId = entry.id;
+      item.dataset.status = entry.status;
+      const label = labelForStepId(entry.id);
+      item.textContent = entry.message ? `${label}: ${entry.status} (${entry.message})` : `${label}: ${entry.status}`;
+      fillReport.appendChild(item);
+    }
+  }
 
   // Tracks the form-readiness half of Autofill's disabled state separately from the
   // run-in-progress half (set by the RUN_STATUS handler below) so neither overwrites the
@@ -99,6 +125,7 @@ export async function initSidePanel(root: HTMLElement): Promise<void> {
 
   autofillButton.addEventListener('click', () => {
     fillStatus.textContent = 'Running…';
+    renderReport([]);
     runInProgress = true;
     syncAutofillDisabled();
     const message: StartFillMessage = { type: 'START_FILL' };
@@ -137,13 +164,23 @@ export async function initSidePanel(root: HTMLElement): Promise<void> {
     const { status: runStatus } = message;
     runInProgress = runStatus.phase === 'running';
     syncAutofillDisabled();
-    if (runStatus.phase === 'running') {
-      fillStatus.textContent = 'Running…';
-    } else if (runStatus.phase === 'done') {
-      const ok = runStatus.report.filter((r) => r.status === 'ok').length;
-      fillStatus.textContent = `Done: ${ok}/${runStatus.report.length} filled.`;
-    } else {
-      fillStatus.textContent = runStatus.message;
+    switch (runStatus.phase) {
+      case 'running':
+        fillStatus.textContent = 'Running…';
+        renderReport([]);
+        break;
+      case 'done':
+        fillStatus.textContent = formatSummary(summarizeReport(runStatus.report));
+        renderReport(runStatus.report);
+        break;
+      case 'failed':
+        fillStatus.textContent = runStatus.message;
+        renderReport(runStatus.report);
+        break;
+      default:
+        // Exhaustiveness check: a new RunStatus phase (src/shared/messages.ts) must be
+        // handled above, not silently fall through here.
+        throw new Error(`initSidePanel: unhandled RUN_STATUS phase ${JSON.stringify(runStatus satisfies never)}`);
     }
   };
 

@@ -244,20 +244,65 @@ describe('initSidePanel', () => {
     expect(autofill?.disabled).toBe(true);
   });
 
-  it('shows the done report when a RUN_STATUS done message arrives', async () => {
+  it('shows a summary line when a RUN_STATUS done message arrives', async () => {
     await initSidePanel(root());
     for (const listener of runtimeMessageListeners) {
       listener({ type: 'RUN_STATUS', status: { phase: 'done', report: [{ id: 'txtName', status: 'ok' }] } });
     }
-    expect(root().querySelector('[data-role="fill-status"]')?.textContent).toMatch(/done/i);
+    expect(root().querySelector('[data-role="fill-status"]')?.textContent).toBe('Filled 1/1.');
   });
 
-  it('shows the failure message when a RUN_STATUS failed message arrives', async () => {
+  it('renders one report row per field, labeled and with its status, on a done run', async () => {
     await initSidePanel(root());
     for (const listener of runtimeMessageListeners) {
-      listener({ type: 'RUN_STATUS', status: { phase: 'failed', message: 'Missing required before filling: txtName', report: [] } });
+      listener({
+        type: 'RUN_STATUS',
+        status: {
+          phase: 'done',
+          report: [
+            { id: 'txtName', status: 'ok' },
+            { id: 'ddlVegetarianOrNon', status: 'skipped', message: 'no value in profile' },
+            { id: 'txtBloodGroup', status: 'failed', message: 'no element found' },
+          ],
+        },
+      });
+    }
+    const rows = root().querySelectorAll<HTMLLIElement>('[data-role="fill-report"] li');
+    expect(rows).toHaveLength(3);
+    expect(rows[0]?.dataset.status).toBe('ok');
+    expect(rows[0]?.textContent).toBe('Basic — Name: ok');
+    expect(rows[1]?.dataset.status).toBe('skipped');
+    expect(rows[1]?.textContent).toBe('ID — Diet: skipped (no value in profile)');
+    expect(rows[2]?.dataset.status).toBe('failed');
+    expect(rows[2]?.textContent).toBe('ID — Blood Group: failed (no element found)');
+  });
+
+  it('shows the failure message and any partial report when a RUN_STATUS failed message arrives', async () => {
+    await initSidePanel(root());
+    for (const listener of runtimeMessageListeners) {
+      listener({
+        type: 'RUN_STATUS',
+        status: {
+          phase: 'failed',
+          message: 'Missing required before filling: txtName',
+          report: [{ id: 'ddlCourse', status: 'ok' }],
+        },
+      });
     }
     expect(root().querySelector('[data-role="fill-status"]')?.textContent).toMatch(/Missing required before filling: txtName/);
+    expect(root().querySelectorAll('[data-role="fill-report"] li')).toHaveLength(1);
+  });
+
+  it('clears the previous report when a new run starts', async () => {
+    currentUrl = 'https://admission.iismgulmarg.in/Default.aspx';
+    await initSidePanel(root());
+    for (const listener of runtimeMessageListeners) {
+      listener({ type: 'RUN_STATUS', status: { phase: 'done', report: [{ id: 'txtName', status: 'ok' }] } });
+    }
+    expect(root().querySelectorAll('[data-role="fill-report"] li')).toHaveLength(1);
+
+    root().querySelector<HTMLButtonElement>('[data-action="autofill"]')?.click();
+    expect(root().querySelectorAll('[data-role="fill-report"] li')).toHaveLength(0);
   });
 
   it('ignores a RUN_STATUS message after the panel has been re-initialized (old listener removed)', async () => {

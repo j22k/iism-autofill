@@ -76,10 +76,13 @@ export function executeStep(input: ExecuteStepInput, deps: ExecuteStepDeps = {})
       const optionLabels = Array.from(element.options).map((option) => option.textContent ?? '');
       const match = matchOption(raw, optionLabels);
       if (match.status === 'none') {
-        return { status: 'skipped', message: `no match for "${raw}"` };
+        // Deliberately doesn't echo `raw` (the profile's actual value) back — this
+        // message reaches the side panel's fill report (T-033), and a profile value
+        // (course/level/state/diet/etc.) has no business ending up there.
+        return { status: 'skipped', message: 'no matching option found' };
       }
       if (match.status === 'ambiguous') {
-        return { status: 'failed', message: `ambiguous match for "${raw}": ${match.options.join(', ')}` };
+        return { status: 'failed', message: `ambiguous match — matches: ${match.options.join(', ')}` };
       }
       const optionEl = Array.from(element.options).find((option) => (option.textContent ?? '') === match.option);
       if (!optionEl) {
