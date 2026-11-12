@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { compressImage, DOCUMENT_TYPES, MAX_IMAGE_BYTES, validateImage } from '../../../src/core/image';
+import { compressImage, DOCUMENT_TYPES, extensionForMimeType, MAX_IMAGE_BYTES, validateImage } from '../../../src/core/image';
 
 describe('validateImage', () => {
   it('accepts a valid jpeg under the size limit', () => {
@@ -60,6 +60,19 @@ describe('validateImage', () => {
 function blobOfSize(bytes: number): Blob {
   return new Blob([new Uint8Array(bytes)]);
 }
+
+describe('extensionForMimeType', () => {
+  it('maps every known accepted type to its extension', () => {
+    expect(extensionForMimeType('image/jpeg')).toBe('jpg');
+    expect(extensionForMimeType('image/png')).toBe('png');
+    expect(extensionForMimeType('image/gif')).toBe('gif');
+    expect(extensionForMimeType('application/pdf')).toBe('pdf');
+  });
+
+  it('falls back to "bin" for an unrecognized type instead of throwing', () => {
+    expect(extensionForMimeType('application/octet-stream')).toBe('bin');
+  });
+});
 
 describe('compressImage', () => {
   it('finds a quality under the limit via binary search without downscaling', async () => {

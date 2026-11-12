@@ -1,10 +1,12 @@
 // Side panel shell (E1, C1): page-detected status, profile dropdown, Autofill/Reset
-// buttons. The actual fill engine (C2-C7) and reset behavior (C8) land in T-032/T-034
-// — until then Autofill/Reset are real, present controls, but honestly disabled rather
-// than wired to do nothing.
+// buttons. T-032 wires Autofill to a real fill run (C2-C6) via START_FILL/RUN_STATUS
+// (src/shared/messages.ts) — the structured per-field report display is T-033's job
+// (C7); this only shows the run's phase and, on failure, its message. Reset stays a
+// real, present, honestly-disabled control until T-034 (C8).
 import { isAdmissionUrl } from '../core/pageDetect';
 import { createEmptyProfile, mergeProfile, profileDisplayName } from '../core/profile';
 import { loadProfile } from '../shared/storage';
+import type { BackgroundToSidePanelMessage, StartFillMessage } from '../shared/messages';
 
 const DISABLED_REASON = 'Coming in a later update';
 
@@ -15,12 +17,14 @@ const DISABLED_REASON = 'Coming in a later update';
 let activeListeners: {
   onActivated: (activeInfo: chrome.tabs.TabActiveInfo) => void;
   onUpdated: (tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => void;
+  onMessage: (message: BackgroundToSidePanelMessage) => void;
 } | null = null;
 
 export async function initSidePanel(root: HTMLElement): Promise<void> {
   if (activeListeners) {
     chrome.tabs.onActivated.removeListener(activeListeners.onActivated);
     chrome.tabs.onUpdated.removeListener(activeListeners.onUpdated);
+    chrome.runtime.onMessage.removeListener(activeListeners.onMessage);
     activeListeners = null;
   }
 
@@ -46,7 +50,6 @@ export async function initSidePanel(root: HTMLElement): Promise<void> {
   const autofillButton = document.createElement('button');
   autofillButton.type = 'button';
   autofillButton.textContent = 'Autofill';
-  autofillButton.title = DISABLED_REASON;
   autofillButton.disabled = true;
   autofillButton.dataset.action = 'autofill';
   root.appendChild(autofillButton);
@@ -65,8 +68,23 @@ export async function initSidePanel(root: HTMLElement): Promise<void> {
   // text.
   const disabledNote = document.createElement('small');
   disabledNote.dataset.role = 'disabled-note';
-  disabledNote.textContent = `Autofill and Reset: ${DISABLED_REASON.toLowerCase()}.`;
+  disabledNote.textContent = `Reset: ${DISABLED_REASON.toLowerCase()}.`;
   root.appendChild(disabledNote);
+
+  const fillStatus = document.createElement('p');
+  fillStatus.dataset.role = 'fill-status';
+  root.appendChild(fillStatus);
+
+  // Tracks the form-readiness half of Autofill's disabled state separately from the
+  // run-in-progress half (set by the RUN_STATUS handler below) so neither overwrites the
+  // other — e.g. a RUN_STATUS "done" arriving shouldn't re-enable Autofill on a tab that
+  // has since navigated away from the admission form.
+  let formReady = false;
+  let runInProgress = false;
+
+  function syncAutofillDisabled(): void {
+    autofillButton.disabled = !formReady || runInProgress;
+  }
 
   async function refreshStatus(): Promise<void> {
     // tab.url is only populated when this extension has permission for that tab's URL
@@ -74,10 +92,18 @@ export async function initSidePanel(root: HTMLElement): Promise<void> {
     // needed or held). For any other tab it comes back undefined, which
     // isAdmissionUrl correctly treats as not-ready.
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    status.textContent = isAdmissionUrl(tab?.url)
-      ? 'On the IISM admission form.'
-      : 'Not on the IISM admission form — open it to use Autofill.';
+    formReady = isAdmissionUrl(tab?.url);
+    status.textContent = formReady ? 'On the IISM admission form.' : 'Not on the IISM admission form — open it to use Autofill.';
+    syncAutofillDisabled();
   }
+
+  autofillButton.addEventListener('click', () => {
+    fillStatus.textContent = 'Running…';
+    runInProgress = true;
+    syncAutofillDisabled();
+    const message: StartFillMessage = { type: 'START_FILL' };
+    void chrome.runtime.sendMessage(message).catch(() => {});
+  });
 
   async function renderProfile(): Promise<void> {
     profileSelect.innerHTML = '';
@@ -104,9 +130,27 @@ export async function initSidePanel(root: HTMLElement): Promise<void> {
       void refreshStatus();
     }
   };
+  const onMessage = (message: BackgroundToSidePanelMessage): void => {
+    if (message.type !== 'RUN_STATUS') {
+      return;
+    }
+    const { status: runStatus } = message;
+    runInProgress = runStatus.phase === 'running';
+    syncAutofillDisabled();
+    if (runStatus.phase === 'running') {
+      fillStatus.textContent = 'Running…';
+    } else if (runStatus.phase === 'done') {
+      const ok = runStatus.report.filter((r) => r.status === 'ok').length;
+      fillStatus.textContent = `Done: ${ok}/${runStatus.report.length} filled.`;
+    } else {
+      fillStatus.textContent = runStatus.message;
+    }
+  };
+
   chrome.tabs.onActivated.addListener(onActivated);
   chrome.tabs.onUpdated.addListener(onUpdated);
-  activeListeners = { onActivated, onUpdated };
+  chrome.runtime.onMessage.addListener(onMessage);
+  activeListeners = { onActivated, onUpdated, onMessage };
 
   await refreshStatus();
   await renderProfile();

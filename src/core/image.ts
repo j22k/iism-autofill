@@ -24,6 +24,21 @@ const TYPE_LABELS: Record<string, string> = {
   'application/pdf': 'PDF',
 };
 
+const EXTENSIONS: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'application/pdf': 'pdf',
+};
+
+// Used when attaching a stored doc that has no usable filename of its own (T-032) —
+// IndexedDB's structured clone preserves a File's `.name`, but a Blob never had one, so
+// this covers that fallback case rather than leaving the upload with no extension.
+export function extensionForMimeType(mimeType: string): string {
+  return EXTENSIONS[mimeType] ?? 'bin';
+}
+
 function describeTypes(types: ReadonlySet<string>): string {
   const labels = [...new Set([...types].map((type) => TYPE_LABELS[type] ?? type))];
   if (labels.length <= 1) {

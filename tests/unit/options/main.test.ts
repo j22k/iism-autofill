@@ -165,9 +165,16 @@ describe('initOptionsPage', () => {
     vi.spyOn(window, 'confirm').mockReturnValueOnce(true);
     root().querySelector<HTMLButtonElement>('[data-action="clear-all"]')?.click();
     // clearAll() also clears IndexedDB docs via fake-indexeddb, whose request callbacks
-    // resolve on a real timer tick rather than a plain microtask, so a few
-    // Promise.resolve() flushes aren't always enough — wait for a real tick instead.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // resolve on a real timer tick rather than a plain microtask — a *fixed* sleep here
+    // flakes under parallel-test load (not enough CPU time in the window), so poll for
+    // the actual outcome instead, same "readiness, not a fixed wait" principle this
+    // project applies to the real page's postback reloads (content/dom.ts's
+    // waitForReload).
+    await vi.waitFor(() => {
+      if (nameInput.value !== '' || agreeCheckbox.checked) {
+        throw new Error('clear-all has not finished resetting the form yet');
+      }
+    });
 
     expect(nameInput.value).toBe('');
     expect(agreeCheckbox.checked).toBe(false);

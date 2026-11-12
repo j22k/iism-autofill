@@ -33,6 +33,21 @@ function setNativeProperty<T>(element: HTMLElement, property: string, value: T):
   descriptor.set.call(element, value);
 }
 
+// Tries each selector in order (core/fieldMap.ts's FieldDef.selectors — `#id` first,
+// then the `[name=...]` fallbacks the architecture doc calls for) and returns the
+// first match. No label-text tier here: that's a dynamic per-call decision the
+// executor (T-032) hasn't needed yet, since every field map entry's `#id` selector has
+// matched in the fixture so far.
+export function findElement(selectors: readonly string[]): Element | null {
+  for (const selector of selectors) {
+    const element = document.querySelector(selector);
+    if (element) {
+      return element;
+    }
+  }
+  return null;
+}
+
 export function setValue(element: HTMLInputElement, value: string | boolean): void {
   if (element.type === 'checkbox') {
     setNativeProperty(element, 'checked', Boolean(value));
@@ -84,6 +99,12 @@ export function attachFile(
   dispatchFillEvents(input, { blur: false });
 }
 
+// Not currently called anywhere in the T-032 data path: content/index.ts relies entirely
+// on the service worker treating a fresh READY-on-reinjection as the reload signal
+// (src/core/fillRun.ts), since polling from inside the content script can't observe a
+// reload that's about to tear that very script down. Kept — a primitive this module
+// already exists for and is still unit-tested — in case a future need for an in-page
+// reload wait (as opposed to the orchestrator's cross-reload wait) comes up.
 export interface WaitForReloadOptions {
   // Called once per poll; the wait resolves once this returns the same value on two
   // consecutive polls (not just once) AND document.readyState is 'complete' — matching

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { attachFile, selectOption, setValue, waitForReload } from '../../../src/content/dom';
+import { attachFile, findElement, selectOption, setValue, waitForReload } from '../../../src/content/dom';
 
 function captureEvents(element: EventTarget): string[] {
   const seen: string[] = [];
@@ -105,6 +105,29 @@ describe('attachFile', () => {
     expect(assignedFile.type).toBe('image/png');
     expect(assignedFile.size).toBe(10);
     expect(seen).toEqual(['input', 'change']);
+  });
+});
+
+describe('findElement', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('returns the first selector that matches, in order', () => {
+    document.body.innerHTML = '<input id="txtName" name="txtName" />';
+    const result = findElement(['#txtName', '[name="txtName"]']);
+    expect(result).toBe(document.getElementById('txtName'));
+  });
+
+  it('falls through to a later selector when an earlier one matches nothing', () => {
+    document.body.innerHTML = '<input name="txtName" />'; // no id
+    const result = findElement(['#txtName', '[name="txtName"]']);
+    expect(result).toBe(document.querySelector('[name="txtName"]'));
+  });
+
+  it('returns null when no selector matches anything', () => {
+    document.body.innerHTML = '<div></div>';
+    expect(findElement(['#txtName', '[name="txtName"]'])).toBeNull();
   });
 });
 

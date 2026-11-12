@@ -14,7 +14,7 @@ describe('manifest.json', () => {
   });
 
   it('requests only the minimum permissions', () => {
-    const allowed = new Set(['storage', 'sidePanel', 'scripting']);
+    const allowed = new Set(['storage', 'sidePanel', 'scripting', 'alarms']);
     for (const permission of manifest.permissions ?? []) {
       expect(allowed.has(permission)).toBe(true);
     }

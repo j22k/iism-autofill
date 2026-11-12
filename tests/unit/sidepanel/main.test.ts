@@ -3,15 +3,20 @@ import { initSidePanel } from '../../../src/sidepanel/main';
 
 type OnActivatedListener = () => void;
 type OnUpdatedListener = (tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => void;
+type OnMessageListener = (message: unknown) => void;
 
 let currentUrl: string | undefined;
 let activatedListeners: OnActivatedListener[];
 let updatedListeners: OnUpdatedListener[];
+let runtimeMessageListeners: OnMessageListener[];
+let sentMessages: unknown[];
 
 function createChromeMock() {
   let profileStore: Record<string, unknown> = {};
   activatedListeners = [];
   updatedListeners = [];
+  runtimeMessageListeners = [];
+  sentMessages = [];
   return {
     tabs: {
       query: vi.fn(async () => (EMPTY_TAB_LIST ? [] : [{ id: 1, url: currentUrl }])),
@@ -25,6 +30,18 @@ function createChromeMock() {
         addListener: vi.fn((cb: OnUpdatedListener) => updatedListeners.push(cb)),
         removeListener: vi.fn((cb: OnUpdatedListener) => {
           updatedListeners = updatedListeners.filter((l) => l !== cb);
+        }),
+      },
+    },
+    runtime: {
+      sendMessage: vi.fn((message: unknown) => {
+        sentMessages.push(message);
+        return Promise.resolve();
+      }),
+      onMessage: {
+        addListener: vi.fn((cb: OnMessageListener) => runtimeMessageListeners.push(cb)),
+        removeListener: vi.fn((cb: OnMessageListener) => {
+          runtimeMessageListeners = runtimeMessageListeners.filter((l) => l !== cb);
         }),
       },
     },
@@ -139,13 +156,116 @@ describe('initSidePanel', () => {
     expect(select?.options[0]?.textContent).toBe('Unnamed profile');
   });
 
-  it('renders Autofill and Reset as present but disabled, with a visible explanation', async () => {
+  it('renders Reset as present but disabled, with a visible explanation (Reset ships in T-034)', async () => {
     await initSidePanel(root());
-    const autofill = root().querySelector<HTMLButtonElement>('[data-action="autofill"]');
     const reset = root().querySelector<HTMLButtonElement>('[data-action="reset"]');
-    expect(autofill?.disabled).toBe(true);
     expect(reset?.disabled).toBe(true);
     expect(root().querySelector('[data-role="disabled-note"]')?.textContent).toBeTruthy();
+  });
+
+  it('disables Autofill when not on the admission form', async () => {
+    currentUrl = 'https://example.com/';
+    await initSidePanel(root());
+    const autofill = root().querySelector<HTMLButtonElement>('[data-action="autofill"]');
+    expect(autofill?.disabled).toBe(true);
+  });
+
+  it('enables Autofill when on the admission form', async () => {
+    currentUrl = 'https://admission.iismgulmarg.in/Default.aspx';
+    await initSidePanel(root());
+    const autofill = root().querySelector<HTMLButtonElement>('[data-action="autofill"]');
+    expect(autofill?.disabled).toBe(false);
+  });
+
+  it('sends START_FILL when Autofill is clicked', async () => {
+    currentUrl = 'https://admission.iismgulmarg.in/Default.aspx';
+    await initSidePanel(root());
+    const autofill = root().querySelector<HTMLButtonElement>('[data-action="autofill"]');
+    autofill?.click();
+    expect(sentMessages).toEqual([{ type: 'START_FILL' }]);
+  });
+
+  it('shows a running status after Autofill is clicked', async () => {
+    currentUrl = 'https://admission.iismgulmarg.in/Default.aspx';
+    await initSidePanel(root());
+    root().querySelector<HTMLButtonElement>('[data-action="autofill"]')?.click();
+    expect(root().querySelector('[data-role="fill-status"]')?.textContent).toMatch(/running/i);
+  });
+
+  it('disables Autofill immediately on click, preventing a duplicate/overlapping run', async () => {
+    currentUrl = 'https://admission.iismgulmarg.in/Default.aspx';
+    await initSidePanel(root());
+    const autofill = root().querySelector<HTMLButtonElement>('[data-action="autofill"]');
+    autofill?.click();
+    expect(autofill?.disabled).toBe(true);
+  });
+
+  it('re-enables Autofill once a RUN_STATUS done message arrives, while still on the form', async () => {
+    currentUrl = 'https://admission.iismgulmarg.in/Default.aspx';
+    await initSidePanel(root());
+    const autofill = root().querySelector<HTMLButtonElement>('[data-action="autofill"]');
+    autofill?.click();
+    expect(autofill?.disabled).toBe(true);
+
+    for (const listener of runtimeMessageListeners) {
+      listener({ type: 'RUN_STATUS', status: { phase: 'done', report: [] } });
+    }
+    expect(autofill?.disabled).toBe(false);
+  });
+
+  it('re-enables Autofill once a RUN_STATUS failed message arrives', async () => {
+    currentUrl = 'https://admission.iismgulmarg.in/Default.aspx';
+    await initSidePanel(root());
+    const autofill = root().querySelector<HTMLButtonElement>('[data-action="autofill"]');
+    autofill?.click();
+
+    for (const listener of runtimeMessageListeners) {
+      listener({ type: 'RUN_STATUS', status: { phase: 'failed', message: 'oops', report: [] } });
+    }
+    expect(autofill?.disabled).toBe(false);
+  });
+
+  it('keeps Autofill disabled after a done run if the tab has since navigated away from the form', async () => {
+    currentUrl = 'https://admission.iismgulmarg.in/Default.aspx';
+    await initSidePanel(root());
+    const autofill = root().querySelector<HTMLButtonElement>('[data-action="autofill"]');
+    autofill?.click();
+
+    currentUrl = 'https://example.com/'; // navigated away mid-run
+    for (const listener of updatedListeners) {
+      listener(1, { status: 'complete' }, { active: true } as chrome.tabs.Tab);
+    }
+    await Promise.resolve();
+    await Promise.resolve();
+
+    for (const listener of runtimeMessageListeners) {
+      listener({ type: 'RUN_STATUS', status: { phase: 'done', report: [] } });
+    }
+    expect(autofill?.disabled).toBe(true);
+  });
+
+  it('shows the done report when a RUN_STATUS done message arrives', async () => {
+    await initSidePanel(root());
+    for (const listener of runtimeMessageListeners) {
+      listener({ type: 'RUN_STATUS', status: { phase: 'done', report: [{ id: 'txtName', status: 'ok' }] } });
+    }
+    expect(root().querySelector('[data-role="fill-status"]')?.textContent).toMatch(/done/i);
+  });
+
+  it('shows the failure message when a RUN_STATUS failed message arrives', async () => {
+    await initSidePanel(root());
+    for (const listener of runtimeMessageListeners) {
+      listener({ type: 'RUN_STATUS', status: { phase: 'failed', message: 'Missing required before filling: txtName', report: [] } });
+    }
+    expect(root().querySelector('[data-role="fill-status"]')?.textContent).toMatch(/Missing required before filling: txtName/);
+  });
+
+  it('ignores a RUN_STATUS message after the panel has been re-initialized (old listener removed)', async () => {
+    await initSidePanel(root());
+    const firstRoundListeners = [...runtimeMessageListeners];
+    await initSidePanel(root());
+    expect(runtimeMessageListeners).toHaveLength(1);
+    expect(runtimeMessageListeners[0]).not.toBe(firstRoundListeners[0]);
   });
 
   it('refreshes status when the active tab changes', async () => {

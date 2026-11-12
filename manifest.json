@@ -3,7 +3,7 @@
   "name": "IISM Form Filler",
   "version": "0.1.0",
   "description": "Autofills the IISM Gulmarg admission form from a profile you keep locally. Never submits for you.",
-  "permissions": ["storage", "sidePanel", "scripting"],
+  "permissions": ["storage", "sidePanel", "scripting", "alarms"],
   "host_permissions": ["https://admission.iismgulmarg.in/*"],
   "background": {
     "service_worker": "background/service-worker.js",

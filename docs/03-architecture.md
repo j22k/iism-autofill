@@ -24,7 +24,12 @@ States: `IDLE → PREFLIGHT → COURSE → SCHEDULE_STATE → FIELDS → DOB →
 - Each step is sent to the content script; steps that cause a postback end with the content script being torn down.
   On re-injection the content script announces `READY`, SW sees pending run and sends the next step.
 - Watchdog: if no `READY` in 60 s → FAILED with message. No infinite loops; max one retry per step.
-- Idempotent steps: skip a field whose current value already equals target.
+  Backed by `chrome.alarms` (ADR-0003), not a plain `setTimeout` — the latter is destroyed the moment MV3
+  evicts an idle service worker, well under 60s, which would otherwise strand a run at `phase: 'running'`
+  forever with nothing left to time it out.
+- Idempotent steps: skip a field whose current value already equals target (src/content/executeStep.ts) —
+  avoids redispatching `change` (and risking a spurious second postback) on a field a prior run already
+  got right.
 
 ## Key technical decisions
 - **Events**: set value via native setter then dispatch `input` + `change` (+`blur`); postback fields: dispatch `change` to trigger page's `setTimeout(__doPostBack…)`.

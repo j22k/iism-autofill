@@ -12,7 +12,9 @@ T-003).
 `manifest.json` requests exactly:
 - `permissions`: `storage` (profile text in `chrome.storage.local`, run state in `chrome.storage.session`),
   `sidePanel` (the main UI surface — autofill/reset/report), `scripting` (service worker needs to
-  message/inject logic into the content script context across postback reloads).
+  message/inject logic into the content script context across postback reloads). T-032 later added
+  `alarms` for the fill-run watchdog, recorded in `docs/adr/0003-alarms-permission.md` per this ADR's own
+  "update in the same change" rule — the set below is the original T-002/T-003 baseline, not the current one.
 - `host_permissions`: `["https://admission.iismgulmarg.in/*"]` — the one site this extension acts on. No
   other host, no `<all_urls>`.
 - No `externally_connectable`, no `activeTab` (not needed — the content script is statically declared for
