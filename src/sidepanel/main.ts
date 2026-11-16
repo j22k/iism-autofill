@@ -2,15 +2,17 @@
 // buttons. T-032 wires Autofill to a real fill run (C2-C6) via START_FILL/RUN_STATUS
 // (src/shared/messages.ts); T-033 adds the structured per-field report (C7) — a summary
 // line plus one row per field, shown on both a completed run and a failed one's partial
-// progress. Reset stays a real, present, honestly-disabled control until T-034 (C8).
+// progress. T-034 wires Reset to a real tab reload (C8, never the site's own btnReset —
+// Hard Rule 7) and adds the pre-flight checklist (C11).
 import { isAdmissionUrl } from '../core/pageDetect';
 import { formatSummary, labelForStepId, summarizeReport } from '../core/fillReport';
 import type { StepReport } from '../core/fillRun';
+import { preflight } from '../core/planner';
+import { preflightChecklist } from '../core/preflightChecklist';
 import { createEmptyProfile, mergeProfile, profileDisplayName } from '../core/profile';
+import { listDocKeys } from '../shared/db';
 import { loadProfile } from '../shared/storage';
-import type { BackgroundToSidePanelMessage, StartFillMessage } from '../shared/messages';
-
-const DISABLED_REASON = 'Coming in a later update';
+import type { BackgroundToSidePanelMessage, ResetMessage, StartFillMessage } from '../shared/messages';
 
 // Listeners registered by the most recent initSidePanel() call, so a second call on
 // the same page (there's no real use case today, but the function is exported and
@@ -59,19 +61,43 @@ export async function initSidePanel(root: HTMLElement): Promise<void> {
   const resetButton = document.createElement('button');
   resetButton.type = 'button';
   resetButton.textContent = 'Reset';
-  resetButton.title = DISABLED_REASON;
   resetButton.disabled = true;
   resetButton.dataset.action = 'reset';
   root.appendChild(resetButton);
 
-  // A disabled <button>'s title tooltip only reaches a sighted mouse user who hovers
-  // it — disabled buttons are skipped by Tab and most screen readers announce only
-  // "disabled", not the title — so the reason is also shown as visible, non-interactive
-  // text.
-  const disabledNote = document.createElement('small');
-  disabledNote.dataset.role = 'disabled-note';
-  disabledNote.textContent = `Reset: ${DISABLED_REASON.toLowerCase()}.`;
-  root.appendChild(disabledNote);
+  const preflightSection = document.createElement('div');
+  preflightSection.dataset.role = 'preflight';
+  root.appendChild(preflightSection);
+
+  // C11: a checklist the user can see before ever clicking Autofill, not only the
+  // reactive failure message startFill already sends if they click it anyway while
+  // incomplete (src/background/service-worker.ts's own preflight check). Computed once
+  // at init (profile/docs only change via the options page, a separate page context),
+  // matching renderProfile's own refresh grain just below.
+  async function renderPreflight(): Promise<void> {
+    preflightSection.innerHTML = '';
+    const rawProfile = await loadProfile();
+    const profile = rawProfile ? mergeProfile(createEmptyProfile(), rawProfile) : createEmptyProfile();
+    const availableDocs = new Set(await listDocKeys());
+    const result = preflight(profile, availableDocs);
+
+    const summary = document.createElement('p');
+    summary.textContent = result.ready
+      ? 'All required fields and documents are present.'
+      : 'Missing required before filling:';
+    preflightSection.appendChild(summary);
+
+    if (!result.ready) {
+      const list = document.createElement('ul');
+      for (const item of preflightChecklist(result)) {
+        const li = document.createElement('li');
+        li.dataset.kind = item.kind;
+        li.textContent = item.label;
+        list.appendChild(li);
+      }
+      preflightSection.appendChild(list);
+    }
+  }
 
   const fillStatus = document.createElement('p');
   fillStatus.dataset.role = 'fill-status';
@@ -121,6 +147,9 @@ export async function initSidePanel(root: HTMLElement): Promise<void> {
     formReady = isAdmissionUrl(tab?.url);
     status.textContent = formReady ? 'On the IISM admission form.' : 'Not on the IISM admission form — open it to use Autofill.';
     syncAutofillDisabled();
+    // Unlike Autofill, Reset stays enabled during a run — bailing out of a stuck/running
+    // fill (by reloading the page) is its most useful case, not something to block.
+    resetButton.disabled = !formReady;
   }
 
   autofillButton.addEventListener('click', () => {
@@ -129,6 +158,15 @@ export async function initSidePanel(root: HTMLElement): Promise<void> {
     runInProgress = true;
     syncAutofillDisabled();
     const message: StartFillMessage = { type: 'START_FILL' };
+    void chrome.runtime.sendMessage(message).catch(() => {});
+  });
+
+  resetButton.addEventListener('click', () => {
+    fillStatus.textContent = '';
+    renderReport([]);
+    runInProgress = false;
+    syncAutofillDisabled();
+    const message: ResetMessage = { type: 'RESET' };
     void chrome.runtime.sendMessage(message).catch(() => {});
   });
 
@@ -191,6 +229,7 @@ export async function initSidePanel(root: HTMLElement): Promise<void> {
 
   await refreshStatus();
   await renderProfile();
+  await renderPreflight();
 }
 
 const app = document.getElementById('app');

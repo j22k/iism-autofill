@@ -52,7 +52,16 @@ export interface StartFillMessage {
   type: 'START_FILL';
 }
 
-export type SidePanelToBackgroundMessage = StartFillMessage;
+// C8: never clicks the site's own btnReset (Hard Rule 7 — it posts back). A plain tab
+// reload clears unsubmitted form state just as well, without ever touching it. Also
+// cancels any fill run in progress for that tab (disarms its watchdog, clears its
+// persisted session) rather than leaving one to keep running against a page that's
+// about to disappear out from under it.
+export interface ResetMessage {
+  type: 'RESET';
+}
+
+export type SidePanelToBackgroundMessage = StartFillMessage | ResetMessage;
 
 // Service worker -> side panel.
 

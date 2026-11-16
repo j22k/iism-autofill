@@ -46,6 +46,9 @@ export interface ServiceWorkerDeps {
   // any still-pending watchdog for that tab.
   armWatchdog: (tabId: number) => Promise<void> | void;
   disarmWatchdog: (tabId: number) => Promise<void> | void;
+  // C8: a plain tab reload, never chrome.tabs.sendMessage'ing the page to click its own
+  // btnReset (Hard Rule 7).
+  reloadTab: (tabId: number) => Promise<void>;
 }
 
 async function buildRunStepMessage(
@@ -73,6 +76,25 @@ async function buildRunStepMessage(
 }
 
 export function createFillOrchestrator(deps: ServiceWorkerDeps) {
+  // Serializes the four operations below per tabId. Each one reads chrome.storage.session
+  // and conditionally writes it back — without this, two concurrent calls for the same
+  // tab (e.g. a RESET click arriving while a STEP_RESULT is mid-flight) can both read the
+  // same pre-write session, and the later write silently clobbers the earlier one. The
+  // specific case this was written for: handleContentMessage reads the still-running
+  // session, then reset() reads that same session and clears it — but
+  // handleContentMessage's own dispatch() finishes afterwards and re-persists the
+  // (now-stale) running state it already had in hand, resurrecting a run the user just
+  // cancelled. Queuing each call behind the previous one for that tabId (regardless of
+  // success/failure) closes this without needing a storage-level compare-and-swap.
+  const tabLocks = new Map<number, Promise<unknown>>();
+
+  function withTabLock<T>(tabId: number, fn: () => Promise<T>): Promise<T> {
+    const previous = tabLocks.get(tabId) ?? Promise.resolve();
+    const settled = previous.then(fn, fn);
+    tabLocks.set(tabId, settled.then(undefined, () => undefined));
+    return settled;
+  }
+
   async function finish(tabId: number): Promise<void> {
     await deps.disarmWatchdog(tabId);
     await deps.setSession(null);
@@ -136,7 +158,7 @@ export function createFillOrchestrator(deps: ServiceWorkerDeps) {
     await applyEffects(tabId, state, effects);
   }
 
-  async function handleWatchdogFired(tabId: number): Promise<void> {
+  async function handleWatchdogFiredImpl(tabId: number): Promise<void> {
     const persisted = await deps.getSession();
     if (!persisted || persisted.tabId !== tabId) {
       return; // run already finished (or belongs to a different tab) — stale alarm
@@ -144,7 +166,7 @@ export function createFillOrchestrator(deps: ServiceWorkerDeps) {
     await dispatch(tabId, persisted.run, { type: 'TIMEOUT' });
   }
 
-  async function startFill(tabId: number): Promise<void> {
+  async function startFillImpl(tabId: number): Promise<void> {
     const profile = await deps.loadProfile();
     if (!profile) {
       deps.broadcast({ type: 'RUN_STATUS', status: { phase: 'failed', message: 'No profile saved yet.', report: [] } });
@@ -170,7 +192,20 @@ export function createFillOrchestrator(deps: ServiceWorkerDeps) {
     await applyEffects(tabId, state, effects);
   }
 
-  async function handleContentMessage(tabId: number, message: ContentToBackgroundMessage): Promise<void> {
+  // Cancels this tab's own in-progress run, if any — a run belonging to a different tab
+  // (multi-tab isolation, same as handleContentMessage) is left alone — then reloads it.
+  // A plain reload clears whatever the user had typed/selected without ever touching the
+  // site's own btnReset, and leaving a cancelled run's session behind would have the next
+  // READY (from the reload this very call triggers) resurrect a run that's meant to be over.
+  async function resetImpl(tabId: number): Promise<void> {
+    const persisted = await deps.getSession();
+    if (persisted && persisted.tabId === tabId) {
+      await finish(tabId);
+    }
+    await deps.reloadTab(tabId);
+  }
+
+  async function handleContentMessageImpl(tabId: number, message: ContentToBackgroundMessage): Promise<void> {
     const persisted = await deps.getSession();
     if (!persisted || persisted.tabId !== tabId) {
       return; // no run in progress for this tab — e.g. a page load with no Autofill requested
@@ -187,7 +222,13 @@ export function createFillOrchestrator(deps: ServiceWorkerDeps) {
     await dispatch(tabId, persisted.run, event);
   }
 
-  return { startFill, handleContentMessage, handleWatchdogFired };
+  return {
+    startFill: (tabId: number) => withTabLock(tabId, () => startFillImpl(tabId)),
+    handleContentMessage: (tabId: number, message: ContentToBackgroundMessage) =>
+      withTabLock(tabId, () => handleContentMessageImpl(tabId, message)),
+    handleWatchdogFired: (tabId: number) => withTabLock(tabId, () => handleWatchdogFiredImpl(tabId)),
+    reset: (tabId: number) => withTabLock(tabId, () => resetImpl(tabId)),
+  };
 }
 
 const WATCHDOG_ALARM_PREFIX = 'fillRunWatchdog:';
@@ -234,6 +275,9 @@ function createRealDeps(): ServiceWorkerDeps {
     disarmWatchdog: async (tabId) => {
       await chrome.alarms.clear(watchdogAlarmName(tabId));
     },
+    reloadTab: async (tabId) => {
+      await chrome.tabs.reload(tabId);
+    },
   };
 }
 
@@ -252,11 +296,19 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.id) {
     const tabId = Number(alarm.name.slice(WATCHDOG_ALARM_PREFIX.length));
     void orchestrator.handleWatchdogFired(tabId);
   });
+  async function activeAdmissionTabId(): Promise<number | null> {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id || !isAdmissionUrl(tab.url)) {
+      return null;
+    }
+    return tab.id;
+  }
+
   chrome.runtime.onMessage.addListener((message: SidePanelToBackgroundMessage | ContentToBackgroundMessage, sender) => {
     if (message.type === 'START_FILL') {
       void (async () => {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (!tab?.id || !isAdmissionUrl(tab.url)) {
+        const tabId = await activeAdmissionTabId();
+        if (tabId === null) {
           void chrome.runtime
             .sendMessage({
               type: 'RUN_STATUS',
@@ -265,7 +317,17 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.id) {
             .catch(() => {});
           return;
         }
-        await orchestrator.startFill(tab.id);
+        await orchestrator.startFill(tabId);
+      })();
+      return;
+    }
+    if (message.type === 'RESET') {
+      void (async () => {
+        const tabId = await activeAdmissionTabId();
+        if (tabId === null) {
+          return; // nothing on the admission form to reset
+        }
+        await orchestrator.reset(tabId);
       })();
       return;
     }

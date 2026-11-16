@@ -37,6 +37,7 @@ interface TestHarness {
   broadcast: ReturnType<typeof vi.fn>;
   getSession: () => Promise<PersistedRun | null>;
   onWatchdogFire: { current: (tabId: number) => void };
+  reloadTab: ReturnType<typeof vi.fn>;
 }
 
 // Fakes the real chrome.alarms-backed watchdog (ADR-0003) with plain setTimeout, injected
@@ -49,6 +50,7 @@ function createHarness(
 ): TestHarness {
   const sendToTab = vi.fn(options.sendToTab ?? (async () => {}));
   const broadcast = vi.fn();
+  const reloadTab = vi.fn(async () => {});
   let session: PersistedRun | null = null;
   const watchdogTimers = new Map<number, ReturnType<typeof setTimeout>>();
   const onWatchdogFire: { current: (tabId: number) => void } = { current: () => {} };
@@ -78,9 +80,10 @@ function createHarness(
         watchdogTimers.delete(tabId);
       }
     },
+    reloadTab,
   };
 
-  return { deps, sendToTab, broadcast, getSession: async () => session, onWatchdogFire };
+  return { deps, sendToTab, broadcast, getSession: async () => session, onWatchdogFire, reloadTab };
 }
 
 function createOrchestrator(harness: TestHarness): ReturnType<typeof createFillOrchestrator> {
@@ -348,6 +351,61 @@ describe('createFillOrchestrator — watchdog', () => {
   });
 });
 
+describe('createFillOrchestrator — reset (C8)', () => {
+  it('reloads the tab even when no run is in progress', async () => {
+    const harness = createHarness();
+    const orchestrator = createOrchestrator(harness);
+
+    await orchestrator.reset(TAB_ID);
+
+    expect(harness.reloadTab).toHaveBeenCalledWith(TAB_ID);
+    expect(await harness.getSession()).toBeNull();
+  });
+
+  it('cancels this tab\'s in-progress run (disarms its watchdog, clears its session) before reloading', async () => {
+    vi.useFakeTimers();
+    const harness = createHarness();
+    const orchestrator = createOrchestrator(harness);
+    await orchestrator.startFill(TAB_ID);
+    expect(await harness.getSession()).not.toBeNull();
+
+    await orchestrator.reset(TAB_ID);
+
+    expect(await harness.getSession()).toBeNull();
+    expect(harness.reloadTab).toHaveBeenCalledWith(TAB_ID);
+
+    // The disarmed watchdog must not still fire and resurrect the cancelled run.
+    harness.sendToTab.mockClear();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(harness.sendToTab).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('never clicks the site\'s own reset/resend — only ever calls reloadTab, never sendToTab, for RESET', async () => {
+    const harness = createHarness();
+    const orchestrator = createOrchestrator(harness);
+    await orchestrator.startFill(TAB_ID);
+    harness.sendToTab.mockClear();
+
+    await orchestrator.reset(TAB_ID);
+
+    expect(harness.sendToTab).not.toHaveBeenCalled();
+  });
+
+  it('leaves a different tab\'s in-progress run untouched (multi-tab isolation)', async () => {
+    const harness = createHarness();
+    const orchestrator = createOrchestrator(harness);
+    await orchestrator.startFill(TAB_ID);
+    const runningSession = await harness.getSession();
+    expect(runningSession).not.toBeNull();
+
+    await orchestrator.reset(999); // a different tab's Reset click
+
+    expect(harness.reloadTab).toHaveBeenCalledWith(999);
+    expect(await harness.getSession()).toEqual(runningSession); // TAB_ID's run is unaffected
+  });
+});
+
 describe('createFillOrchestrator — resuming after a fresh instance (simulating SW eviction/restart)', () => {
   it('a brand-new orchestrator continues correctly once it reads the persisted session', async () => {
     let session: PersistedRun | null = null;
@@ -369,6 +427,7 @@ describe('createFillOrchestrator — resuming after a fresh instance (simulating
         const existing = watchdogTimers.get(tabId);
         if (existing !== undefined) clearTimeout(existing);
       },
+      reloadTab: async () => {},
     };
     const sharedStorage: Pick<ServiceWorkerDeps, 'getSession' | 'setSession'> = {
       getSession: async () => session,

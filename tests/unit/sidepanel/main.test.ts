@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initSidePanel } from '../../../src/sidepanel/main';
+import * as db from '../../../src/shared/db';
 
 type OnActivatedListener = () => void;
 type OnUpdatedListener = (tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => void;
@@ -73,6 +74,9 @@ beforeEach(() => {
   EMPTY_TAB_LIST = false;
   document.body.innerHTML = '<div id="app"></div>';
   vi.stubGlobal('chrome', createChromeMock());
+  // Preflight (C11) needs listDocKeys; a complete profile with no docs at all is the
+  // common case to test against, so default to it and let individual tests override.
+  vi.spyOn(db, 'listDocKeys').mockResolvedValue([]);
 });
 
 function root(): HTMLElement {
@@ -92,6 +96,22 @@ async function setStoredProfile(partial: { name?: string; missingPersonal?: bool
   if (!partial.missingPersonal) {
     profile.personal = { name: partial.name ?? '', fatherName: '', nationality: '', dob: '' };
   }
+  await chrome.storage.local.set({ profile });
+}
+
+const ALL_REQUIRED_DOCS = ['docs.dobProof', 'docs.educationProof', 'docs.photo', 'docs.signature', 'docs.guardianSignature'];
+
+async function setCompleteStoredProfile(): Promise<void> {
+  const profile = {
+    course: { type: 'ski', level: 'Basic', batch: 'batch-1', state: 'JAMMU AND KASHMIR' },
+    personal: { name: 'Test Name', fatherName: 'Father Name', nationality: 'Indian', dob: '2005-06-15', domicile: 'Testville' },
+    address: { house: 'H.No. 1', street: 'Main St', city: 'Testville', pincode: '560001' },
+    contact: { mobile: '9876543210', email: 'test@example.com' },
+    education: { qualification: 'Graduation' },
+    medical: { diet: 'Vegetarian', bloodGroup: 'O+' },
+    emergency: { name: 'Emergency Contact', phone: '9876543211' },
+    declaration: { agree: false },
+  };
   await chrome.storage.local.set({ profile });
 }
 
@@ -156,11 +176,86 @@ describe('initSidePanel', () => {
     expect(select?.options[0]?.textContent).toBe('Unnamed profile');
   });
 
-  it('renders Reset as present but disabled, with a visible explanation (Reset ships in T-034)', async () => {
+  it('disables Reset when not on the admission form', async () => {
+    currentUrl = 'https://example.com/';
     await initSidePanel(root());
-    const reset = root().querySelector<HTMLButtonElement>('[data-action="reset"]');
-    expect(reset?.disabled).toBe(true);
-    expect(root().querySelector('[data-role="disabled-note"]')?.textContent).toBeTruthy();
+    expect(root().querySelector<HTMLButtonElement>('[data-action="reset"]')?.disabled).toBe(true);
+  });
+
+  it('enables Reset when on the admission form', async () => {
+    currentUrl = 'https://admission.iismgulmarg.in/Default.aspx';
+    await initSidePanel(root());
+    expect(root().querySelector<HTMLButtonElement>('[data-action="reset"]')?.disabled).toBe(false);
+  });
+
+  it('sends RESET when Reset is clicked', async () => {
+    currentUrl = 'https://admission.iismgulmarg.in/Default.aspx';
+    await initSidePanel(root());
+    root().querySelector<HTMLButtonElement>('[data-action="reset"]')?.click();
+    expect(sentMessages).toEqual([{ type: 'RESET' }]);
+  });
+
+  it('clears the fill status and report when Reset is clicked', async () => {
+    currentUrl = 'https://admission.iismgulmarg.in/Default.aspx';
+    await initSidePanel(root());
+    for (const listener of runtimeMessageListeners) {
+      listener({ type: 'RUN_STATUS', status: { phase: 'done', report: [{ id: 'txtName', status: 'ok' }] } });
+    }
+    expect(root().querySelector('[data-role="fill-status"]')?.textContent).not.toBe('');
+
+    root().querySelector<HTMLButtonElement>('[data-action="reset"]')?.click();
+
+    expect(root().querySelector('[data-role="fill-status"]')?.textContent).toBe('');
+    expect(root().querySelectorAll('[data-role="fill-report"] li')).toHaveLength(0);
+  });
+
+  it('keeps Reset enabled while a run is in progress, so a stuck run can be bailed out of', async () => {
+    currentUrl = 'https://admission.iismgulmarg.in/Default.aspx';
+    await initSidePanel(root());
+    root().querySelector<HTMLButtonElement>('[data-action="autofill"]')?.click();
+    expect(root().querySelector<HTMLButtonElement>('[data-action="reset"]')?.disabled).toBe(false);
+  });
+
+  it('re-enables Autofill after Reset is clicked mid-run, since the run is being cancelled', async () => {
+    currentUrl = 'https://admission.iismgulmarg.in/Default.aspx';
+    await initSidePanel(root());
+    const autofill = root().querySelector<HTMLButtonElement>('[data-action="autofill"]');
+    autofill?.click();
+    expect(autofill?.disabled).toBe(true);
+
+    root().querySelector<HTMLButtonElement>('[data-action="reset"]')?.click();
+
+    expect(autofill?.disabled).toBe(false);
+  });
+
+  it('shows a ready preflight message when every required field and document is present', async () => {
+    await setCompleteStoredProfile();
+    vi.spyOn(db, 'listDocKeys').mockResolvedValue(ALL_REQUIRED_DOCS);
+    await initSidePanel(root());
+    expect(root().querySelector('[data-role="preflight"]')?.textContent).toMatch(/All required fields and documents are present/);
+    expect(root().querySelectorAll('[data-role="preflight"] li')).toHaveLength(0);
+  });
+
+  it('lists each missing required field and document in the preflight checklist', async () => {
+    // No profile saved at all and no docs — everything required is missing.
+    await initSidePanel(root());
+    const preflightSection = root().querySelector('[data-role="preflight"]');
+    expect(preflightSection?.textContent).toMatch(/Missing required before filling/);
+    const items = root().querySelectorAll<HTMLLIElement>('[data-role="preflight"] li');
+    expect(items.length).toBeGreaterThan(0);
+    const fieldLabels = [...items].map((li) => li.textContent);
+    expect(fieldLabels).toContain('Basic — Name');
+    const docItem = [...items].find((li) => li.dataset.kind === 'doc');
+    expect(docItem?.textContent).toBeTruthy();
+  });
+
+  it('only lists missing fields/docs, not ones already present, in the preflight checklist', async () => {
+    await setCompleteStoredProfile();
+    vi.spyOn(db, 'listDocKeys').mockResolvedValue([]); // profile complete, but no docs uploaded
+    await initSidePanel(root());
+    const items = [...root().querySelectorAll<HTMLLIElement>('[data-role="preflight"] li')];
+    expect(items.every((li) => li.dataset.kind === 'doc')).toBe(true);
+    expect(items.length).toBeGreaterThan(0);
   });
 
   it('disables Autofill when not on the admission form', async () => {
