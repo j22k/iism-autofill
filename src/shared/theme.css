@@ -1,0 +1,76 @@
+:root {
+  --bg: #f4f6fa;
+  --surface: #ffffff;
+  --text: #0f172a;
+  --muted: #5b6577;
+  --border: #dde2ec;
+  --accent: #1d4ed8;
+  --accent-hover: #1e40af;
+  --accent-text: #ffffff;
+  --ok: #15803d;
+  --ok-bg: #e7f6ec;
+  --warn: #b45309;
+  --warn-bg: #fff4e0;
+  --bad: #b91c1c;
+  --bad-bg: #fdeaea;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 14px rgba(15, 23, 42, 0.05);
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e131c;
+    --surface: #171e2b;
+    --text: #e8ecf4;
+    --muted: #9aa5b8;
+    --border: #2a3446;
+    --accent: #5b8cff;
+    --accent-hover: #7aa0ff;
+    --accent-text: #0b1220;
+    --ok: #4ade80;
+    --ok-bg: #12301e;
+    --warn: #fbbf24;
+    --warn-bg: #33270d;
+    --bad: #f87171;
+    --bad-bg: #3a1717;
+    --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+button, input, select { font: inherit; color: inherit; }
+button {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.05s;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+input[type='text'], select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+input[type='text']:focus, select:focus, button:focus-visible, input[type='file']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand .logo {
+  width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center;
+  background: var(--accent); color: var(--accent-text); font-weight: 800;
+}
+.brand h1 { font-size: 16px; margin: 0; line-height: 1.1; }
+.brand small { color: var(--muted); font-size: 12px; }

@@ -9,6 +9,20 @@ import { clearAll, loadProfile, saveProfile } from '../shared/storage';
 
 const AUTOSAVE_DEBOUNCE_MS = 500;
 
+// Hints for fields whose format isn't obvious (dropdown-backed ones are matched against
+// the site's own option text, so type it the way the site shows it).
+const PLACEHOLDERS: Record<string, string> = {
+  'course.type': 'As shown on the site, e.g. Snow Skiing Courses at Gulmarg',
+  'course.level': 'e.g. Basic',
+  'course.batch': 'The batch/schedule text from the site',
+  'course.state': 'e.g. Jammu and Kashmir',
+  'personal.dob': 'YYYY-MM-DD',
+  'contact.mobile': '10-digit mobile',
+  'address.pincode': '6 digits',
+  'education.qualification': 'e.g. Graduation',
+  'medical.bloodGroup': 'e.g. O+',
+};
+
 export async function initOptionsPage(root: HTMLElement): Promise<void> {
   const profile = mergeProfile(createEmptyProfile(), await loadProfile());
   const errorElements = new Map<string, HTMLElement>();
@@ -118,6 +132,10 @@ export async function initOptionsPage(root: HTMLElement): Promise<void> {
       });
     } else {
       input.type = 'text';
+      const hint = PLACEHOLDERS[path];
+      if (hint) {
+        input.placeholder = hint;
+      }
       input.value = String(getByPath(profile, path) ?? '');
       input.addEventListener('input', () => {
         setByPath(profile, path, input.value);

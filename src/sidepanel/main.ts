@@ -198,6 +198,7 @@ export async function initSidePanel(root: HTMLElement): Promise<void> {
     // isAdmissionUrl correctly treats as not-ready.
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     formReady = isAdmissionUrl(tab?.url);
+    status.dataset.state = formReady ? 'ready' : 'idle';
     status.textContent = formReady ? 'On the IISM admission form.' : 'Not on the IISM admission form — open it to use Autofill.';
     syncAutofillDisabled();
     // Unlike Autofill, Reset stays enabled during a run — bailing out of a stuck/running
