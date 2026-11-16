@@ -1,6 +1,7 @@
 // Profile editor: autosave + inline validation (A1-A3), clear-all (A7). Document
 // upload UI (B1-B3) is a separate module, added in T-022.
 import { EDITABLE_FIELDS, getByPath, groupFieldsBySection, setByPath, type FieldDef } from '../core/fieldMap';
+import { isoToFormDate } from '../core/dateFormat';
 import { labelForPath } from '../core/labels';
 import { createEmptyProfile, mergeProfile } from '../core/profile';
 import { validateProfile } from '../core/profileValidation';
@@ -47,6 +48,35 @@ export async function initOptionsPage(root: HTMLElement): Promise<void> {
 
     root.appendChild(fieldset);
   }
+
+  // Explicit save (autosave still runs): flushes any pending debounce and confirms.
+  const saveButton = document.createElement('button');
+  saveButton.type = 'button';
+  saveButton.dataset.action = 'save';
+  saveButton.className = 'primary';
+  saveButton.textContent = 'Save profile';
+  const saveMessage = document.createElement('span');
+  saveMessage.dataset.role = 'save-status';
+  saveMessage.setAttribute('role', 'status');
+  saveButton.addEventListener('click', () => {
+    if (isClearing) {
+      return;
+    }
+    if (saveTimeout !== undefined) {
+      clearTimeout(saveTimeout);
+      saveTimeout = undefined;
+    }
+    void saveProfile(profile).then(() => {
+      const problems = validateProfile(profile).length;
+      saveMessage.textContent =
+        problems === 0
+          ? `Saved at ${new Date().toLocaleTimeString()}.`
+          : `Saved, but ${problems} field(s) still need attention (see the notes above).`;
+      saveMessage.dataset.state = problems === 0 ? 'ok' : 'warn';
+    });
+  });
+  root.appendChild(saveButton);
+  root.appendChild(saveMessage);
 
   // A5: backup/restore of the text profile (documents are not included).
   const exportButton = document.createElement('button');
@@ -130,6 +160,28 @@ export async function initOptionsPage(root: HTMLElement): Promise<void> {
           void saveProfile(profile);
         }
       });
+    } else if (path === 'personal.dob') {
+      // Native date picker: always yields yyyy-mm-dd, the format the profile stores.
+      input.type = 'date';
+      input.min = '1940-01-01';
+      input.max = new Date().toISOString().slice(0, 10);
+      input.value = String(getByPath(profile, path) ?? '');
+      const formatHint = document.createElement('span');
+      formatHint.dataset.role = 'dob-format';
+      formatHint.className = 'hint';
+      const updateHint = (): void => {
+        const formatted = isoToFormDate(input.value);
+        formatHint.textContent = formatted ? `Will be filled as ${formatted} (dd/MM/yyyy)` : 'Pick your date of birth';
+      };
+      updateHint();
+      input.addEventListener('input', () => {
+        setByPath(profile, path, input.value);
+        updateHint();
+        revalidate(path);
+        scheduleSave();
+      });
+      wrapper.appendChild(input);
+      wrapper.appendChild(formatHint);
     } else {
       input.type = 'text';
       const hint = PLACEHOLDERS[path];
@@ -143,7 +195,9 @@ export async function initOptionsPage(root: HTMLElement): Promise<void> {
         scheduleSave();
       });
     }
-    wrapper.appendChild(input);
+    if (!wrapper.contains(input)) {
+      wrapper.appendChild(input);
+    }
 
     const errorEl = document.createElement('span');
     errorEl.id = errorId;

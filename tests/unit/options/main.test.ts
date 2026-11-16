@@ -206,3 +206,26 @@ describe('initOptionsPage', () => {
     vi.useRealTimers();
   });
 });
+
+describe('date picker and explicit save', () => {
+  it('renders DOB as a native date input and shows the dd/MM/yyyy it will fill', async () => {
+    await initOptionsPage(root());
+    const dob = root().querySelector<HTMLInputElement>('input[data-path="personal.dob"]') as HTMLInputElement;
+    expect(dob.type).toBe('date');
+    dob.value = '2000-01-15';
+    dob.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(root().querySelector('[data-role="dob-format"]')?.textContent).toContain('15/01/2000');
+  });
+
+  it('Save profile persists immediately and reports problems', async () => {
+    await initOptionsPage(root());
+    const name = root().querySelector<HTMLInputElement>('input[data-path="personal.name"]') as HTMLInputElement;
+    name.value = 'Saved Now';
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+    (root().querySelector('[data-action="save"]') as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(root().querySelector('[data-role="save-status"]')?.textContent).toContain('Saved'));
+    const stored = (await chromeMock.storage.local.get('profile')) as { profile: Profile };
+    expect(stored.profile.personal.name).toBe('Saved Now');
+    expect(root().querySelector('[data-role="save-status"]')?.textContent).toContain('need attention');
+  });
+});

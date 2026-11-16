@@ -32,3 +32,10 @@ input[type='file']::file-selector-button { border: 1px solid var(--border); back
 .doc-slot img { max-width: 100%; max-height: 120px; object-fit: contain; border-radius: 8px; border: 1px solid var(--border); background: #fff; align-self: flex-start; }
 .doc-slot img:not([src]) { display: none; }
 .doc-slot button { align-self: flex-start; font-size: 12.5px; padding: 5px 10px; }
+
+.hint { color: var(--muted); font-size: 12px; }
+input[type='date'] { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+button.primary:hover:not(:disabled) { background: var(--accent-hover); }
+[data-role='save-status'] { font-weight: 600; color: var(--ok); }
+[data-role='save-status'][data-state='warn'] { color: var(--warn); }
