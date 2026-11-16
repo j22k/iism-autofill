@@ -187,3 +187,24 @@ describe('initDocumentManager', () => {
     expect(removeButton?.getAttribute('aria-label')).toMatch(/Photo/);
   });
 });
+
+describe('auto-compress (B4)', () => {
+  it('replaces an oversized image with the compressed one before saving', async () => {
+    const compressed = new File([new Uint8Array(1000)], 'photo.jpg', { type: 'image/jpeg' });
+    const compress = vi.fn(() => Promise.resolve(compressed));
+    await initDocumentManager(root(), { createThumbnailUrl: testThumbnailUrl, revokeThumbnailUrl, compress });
+    const input = root().querySelector<HTMLInputElement>('input[data-doc="docs.photo"]') as HTMLInputElement;
+    selectFile(input, new File([new Uint8Array(600_000)], 'big.jpg', { type: 'image/jpeg' }));
+    await vi.waitFor(() => expect(db.putDoc).toHaveBeenCalledWith('docs.photo', compressed));
+    expect(compress).toHaveBeenCalledTimes(1);
+  });
+
+  it('still shows the size error when compression is not possible', async () => {
+    const compress = vi.fn(() => Promise.resolve(null));
+    await initDocumentManager(root(), { createThumbnailUrl: testThumbnailUrl, revokeThumbnailUrl, compress });
+    const input = root().querySelector<HTMLInputElement>('input[data-doc="docs.photo"]') as HTMLInputElement;
+    selectFile(input, new File([new Uint8Array(600_000)], 'big.jpg', { type: 'image/jpeg' }));
+    await vi.waitFor(() => expect(root().textContent).toContain('KB'));
+    expect(db.putDoc).not.toHaveBeenCalled();
+  });
+});

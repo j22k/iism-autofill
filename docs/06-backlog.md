@@ -33,10 +33,10 @@ Format: `- [ ] T-ID title — acceptance criteria`. Tick when `npm run verify` i
 
 ## Phase 4 — Hardening & P1
 - [ ] T-040 Real-form manual smoke test (docs/05-test-plan.md); record findings as new tasks here.
-- [ ] T-041 Multiple profiles (A4) — NOT DONE.
+- [ ] T-041 Multiple profiles (A4) — NOT DONE: documents are stored once (not per profile), so real multi-person support needs per-profile doc keys; use Export/Import meanwhile.
 - [x] T-042 Export/import (A5) · T-043 Completeness meter (A6) — DONE 2026-11-16 (profile JSON only; docs not included).
 - [x] T-044 Dry-run (C9) preview button, re-fill failed (C10) = Autofill is idempotent so clicking again retries only what's wrong, required-field highlight (C13) — DONE 2026-11-16.
-- [x] T-045 (partial) Drift detector (D4) warning in side panel — DONE 2026-11-16. NOT DONE: course warnings (C12), auto-compress UI (B4), guardian-sig reuse (B6).
+- [x] T-045 (partial) Drift detector (D4) warning in side panel — DONE 2026-11-16. Also DONE 2026-11-16: course warnings (C12), auto-compress on upload (B4, canvas->JPEG, untested in a real browser), guardian-sig reuse (B6).
 - [x] T-046 Packaging: `npm run package`, `docs/RELEASE.md` — DONE 2026-11-16 (no Web Store upload).
 
 ## Parking lot (P2)

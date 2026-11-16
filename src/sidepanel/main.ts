@@ -7,6 +7,7 @@
 import { isAdmissionUrl } from '../core/pageDetect';
 import { formatSummary, labelForStepId, summarizeReport } from '../core/fillReport';
 import type { StepReport } from '../core/fillRun';
+import { courseWarnings } from '../core/courseWarnings';
 import { buildPlan, preflight } from '../core/planner';
 import { getByPath } from '../core/fieldMap';
 import { preflightChecklist } from '../core/preflightChecklist';
@@ -119,6 +120,13 @@ export async function initSidePanel(root: HTMLElement): Promise<void> {
     const profile = rawProfile ? mergeProfile(createEmptyProfile(), rawProfile) : createEmptyProfile();
     const availableDocs = new Set(await listDocKeys());
     const result = preflight(profile, availableDocs);
+
+    for (const w of courseWarnings(profile)) {
+      const note = document.createElement('p');
+      note.dataset.role = 'course-warning';
+      note.textContent = w;
+      preflightSection.appendChild(note);
+    }
 
     const missingCount = result.missingFields.length + result.missingDocs.length;
     const meter = document.createElement('p');

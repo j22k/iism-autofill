@@ -1,9 +1,9 @@
 // Document manager: upload/validate/thumbnail/remove for every file-kind field
 // (B1 required docs, B2 optional docs, B3 validate type/size with a clear error).
-// Auto-compress (B4) and "reuse signature as guardian signature" (B6) are separate,
-// later P1 tasks (docs/06-backlog.md T-045) — this only accepts or rejects as-is.
+// Auto-compress (B4) shrinks an oversized photo before validating; B6 lives in core/planner.ts.
 import { FILE_FIELDS, type FieldDef } from '../core/fieldMap';
-import { validateImage } from '../core/image';
+import { MAX_IMAGE_BYTES, validateImage } from '../core/image';
+import { compressFile } from './canvasCompress';
 import { labelForPath } from '../core/labels';
 import { deleteDoc, getDoc, putDoc } from '../shared/db';
 
@@ -13,11 +13,14 @@ import { deleteDoc, getDoc, putDoc } from '../shared/db';
 export interface DocumentManagerDeps {
   createThumbnailUrl: (blob: Blob) => string;
   revokeThumbnailUrl: (url: string) => void;
+  // B4: returns a smaller file, or null when it can't be compressed.
+  compress: (file: File) => Promise<File | null>;
 }
 
 const DEFAULT_DEPS: DocumentManagerDeps = {
   createThumbnailUrl: (blob) => URL.createObjectURL(blob),
   revokeThumbnailUrl: (url) => URL.revokeObjectURL(url),
+  compress: compressFile,
 };
 
 function acceptAttribute(acceptedTypes: ReadonlySet<string>): string {
@@ -28,7 +31,7 @@ export async function initDocumentManager(
   root: HTMLElement,
   deps: Partial<DocumentManagerDeps> = {},
 ): Promise<void> {
-  const { createThumbnailUrl, revokeThumbnailUrl } = { ...DEFAULT_DEPS, ...deps };
+  const { createThumbnailUrl, revokeThumbnailUrl, compress } = { ...DEFAULT_DEPS, ...deps };
   const currentThumbnailUrls = new Map<string, string>();
 
   root.innerHTML = '';
@@ -131,11 +134,26 @@ export async function initDocumentManager(
     setRequiredState(existing !== null);
 
     input.addEventListener('change', () => {
-      const file = input.files?.[0];
+      const picked = input.files?.[0];
       input.value = '';
-      if (!file) {
+      if (!picked) {
         return;
       }
+      void (async () => {
+        let file: File = picked;
+        if (file.size > MAX_IMAGE_BYTES && def.acceptedTypes.has('image/jpeg')) {
+          setBusy(true);
+          const smaller = await compress(file).catch(() => null);
+          setBusy(false);
+          if (smaller) {
+            file = smaller;
+          }
+        }
+        handlePicked(file);
+      })();
+    });
+
+    function handlePicked(file: File): void {
       const result = validateImage(file, def.acceptedTypes);
       if (!result.valid) {
         setError(result.errors.join(' '));
@@ -149,7 +167,7 @@ export async function initDocumentManager(
         showThumbnail(file);
         setError('');
       });
-    });
+    }
 
     removeButton.addEventListener('click', () => {
       const startedAt = ++generation;
