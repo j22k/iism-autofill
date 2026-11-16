@@ -44,7 +44,22 @@ export interface RunStepMessage {
   file?: FilePayload;
 }
 
-export type BackgroundToContentMessage = RunStepMessage;
+// Side panel -> content script (read-only page inspection; never changes the form,
+// except HIGHLIGHT_REQUIRED which only adds a CSS outline).
+// CHECK_PAGE (D4) answers which mapped field ids the live page no longer has.
+export interface CheckPageMessage {
+  type: 'CHECK_PAGE';
+}
+// HIGHLIGHT_REQUIRED (C13) outlines required fields still empty and answers with their ids.
+export interface HighlightRequiredMessage {
+  type: 'HIGHLIGHT_REQUIRED';
+}
+export interface PageCheckResponse {
+  missing?: string[];
+  empty?: string[];
+}
+
+export type BackgroundToContentMessage = RunStepMessage | CheckPageMessage | HighlightRequiredMessage;
 
 // Side panel -> service worker.
 

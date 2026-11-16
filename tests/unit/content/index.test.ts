@@ -73,3 +73,31 @@ describe('initContentScript', () => {
     expect(sendMessage).not.toHaveBeenCalled();
   });
 });
+
+describe('page inspection messages', () => {
+  it('CHECK_PAGE reports mapped fields missing from the page', () => {
+    document.body.innerHTML = '<input id="txtName" />';
+    const { chrome, listeners } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+    initContentScript();
+    const sendResponse = vi.fn();
+    (listeners[0] as (m: unknown, s: unknown, r: (x: unknown) => void) => void)({ type: 'CHECK_PAGE' }, {}, sendResponse);
+    const arg = sendResponse.mock.calls[0]?.[0] as { missing: string[] };
+    expect(arg.missing).toContain('txtEmergencyContactName');
+    expect(arg.missing).not.toContain('txtName');
+  });
+
+  it('HIGHLIGHT_REQUIRED outlines empty required fields only', () => {
+    document.body.innerHTML = '<input id="txtName" value="" /><input id="txtNationality" value="Indian" />';
+    const { chrome, listeners } = createChromeMock();
+    vi.stubGlobal('chrome', chrome);
+    initContentScript();
+    const sendResponse = vi.fn();
+    (listeners[0] as (m: unknown, s: unknown, r: (x: unknown) => void) => void)({ type: 'HIGHLIGHT_REQUIRED' }, {}, sendResponse);
+    const arg = sendResponse.mock.calls[0]?.[0] as { empty: string[] };
+    expect(arg.empty).toContain('txtName');
+    expect(arg.empty).not.toContain('txtNationality');
+    expect(document.getElementById('txtName')?.style.outline).toContain('solid');
+    expect(document.getElementById('txtNationality')?.style.outline).toBe('');
+  });
+});

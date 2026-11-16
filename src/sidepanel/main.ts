@@ -7,12 +7,20 @@
 import { isAdmissionUrl } from '../core/pageDetect';
 import { formatSummary, labelForStepId, summarizeReport } from '../core/fillReport';
 import type { StepReport } from '../core/fillRun';
-import { preflight } from '../core/planner';
+import { buildPlan, preflight } from '../core/planner';
+import { getByPath } from '../core/fieldMap';
 import { preflightChecklist } from '../core/preflightChecklist';
 import { createEmptyProfile, mergeProfile, profileDisplayName } from '../core/profile';
 import { listDocKeys } from '../shared/db';
 import { loadProfile } from '../shared/storage';
-import type { BackgroundToSidePanelMessage, ResetMessage, StartFillMessage } from '../shared/messages';
+import type {
+  BackgroundToSidePanelMessage,
+  CheckPageMessage,
+  HighlightRequiredMessage,
+  PageCheckResponse,
+  ResetMessage,
+  StartFillMessage,
+} from '../shared/messages';
 
 // Listeners registered by the most recent initSidePanel() call, so a second call on
 // the same page (there's no real use case today, but the function is exported and
@@ -65,6 +73,37 @@ export async function initSidePanel(root: HTMLElement): Promise<void> {
   resetButton.dataset.action = 'reset';
   root.appendChild(resetButton);
 
+  const previewButton = document.createElement('button');
+  previewButton.type = 'button';
+  previewButton.textContent = 'Preview (dry run)';
+  previewButton.dataset.action = 'preview';
+  root.appendChild(previewButton);
+
+  const drift = document.createElement('p');
+  drift.dataset.role = 'drift';
+  drift.setAttribute('role', 'alert');
+  root.appendChild(drift);
+
+  const previewList = document.createElement('ul');
+  previewList.dataset.role = 'preview';
+  root.appendChild(previewList);
+
+  // C9: shows what Autofill WOULD write, in order, without touching the page.
+  previewButton.addEventListener('click', () => {
+    void (async () => {
+      previewList.innerHTML = '';
+      const rawProfile = await loadProfile();
+      const profile = rawProfile ? mergeProfile(createEmptyProfile(), rawProfile) : createEmptyProfile();
+      const docs = new Set(await listDocKeys());
+      for (const step of buildPlan(profile, docs)) {
+        const li = document.createElement('li');
+        const value = step.kind === 'file' ? '(file)' : String(getByPath(profile, step.source) ?? '');
+        li.textContent = `${labelForStepId(step.id)}: ${value}`;
+        previewList.appendChild(li);
+      }
+    })();
+  });
+
   const preflightSection = document.createElement('div');
   preflightSection.dataset.role = 'preflight';
   root.appendChild(preflightSection);
@@ -80,6 +119,12 @@ export async function initSidePanel(root: HTMLElement): Promise<void> {
     const profile = rawProfile ? mergeProfile(createEmptyProfile(), rawProfile) : createEmptyProfile();
     const availableDocs = new Set(await listDocKeys());
     const result = preflight(profile, availableDocs);
+
+    const missingCount = result.missingFields.length + result.missingDocs.length;
+    const meter = document.createElement('p');
+    meter.dataset.role = 'completeness';
+    meter.textContent = missingCount === 0 ? 'Profile complete.' : `${missingCount} required item(s) missing.`;
+    preflightSection.appendChild(meter);
 
     const summary = document.createElement('p');
     summary.textContent = result.ready
@@ -150,6 +195,20 @@ export async function initSidePanel(root: HTMLElement): Promise<void> {
     // Unlike Autofill, Reset stays enabled during a run — bailing out of a stuck/running
     // fill (by reloading the page) is its most useful case, not something to block.
     resetButton.disabled = !formReady;
+    drift.textContent = '';
+    if (formReady && tab?.id !== undefined) {
+      const check: CheckPageMessage = { type: 'CHECK_PAGE' };
+      try {
+        const res = (await chrome.tabs.sendMessage(tab.id, check)) as PageCheckResponse | undefined;
+        if (res?.missing && res.missing.length > 0) {
+          drift.textContent = `Warning: the form has changed - ${res.missing.length} expected field(s) not found: ${res.missing
+            .map(labelForStepId)
+            .join(', ')}. Check those by hand.`;
+        }
+      } catch {
+        // content script not injected yet (page still loading) - nothing to report
+      }
+    }
   }
 
   autofillButton.addEventListener('click', () => {
@@ -183,6 +242,23 @@ export async function initSidePanel(root: HTMLElement): Promise<void> {
     profileSelect.appendChild(option);
   }
 
+  // C13: after a run, outline any required field still empty on the live page.
+  async function highlightRequired(): Promise<void> {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id === undefined) {
+        return;
+      }
+      const msg: HighlightRequiredMessage = { type: 'HIGHLIGHT_REQUIRED' };
+      const res = (await chrome.tabs.sendMessage(tab.id, msg)) as PageCheckResponse | undefined;
+      if (res?.empty && res.empty.length > 0) {
+        fillStatus.textContent += ` Still empty (outlined in red): ${res.empty.map(labelForStepId).join(', ')}.`;
+      }
+    } catch {
+      // page mid-navigation - skip
+    }
+  }
+
   const onActivated = (): void => {
     void refreshStatus();
   };
@@ -210,6 +286,7 @@ export async function initSidePanel(root: HTMLElement): Promise<void> {
       case 'done':
         fillStatus.textContent = formatSummary(summarizeReport(runStatus.report));
         renderReport(runStatus.report);
+        void highlightRequired();
         break;
       case 'failed':
         fillStatus.textContent = runStatus.message;

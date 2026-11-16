@@ -4,6 +4,7 @@
 // and executes whatever single RUN_STEP the service worker sends, reporting the
 // outcome back. Never decides what to fill or in what order; that's buildPlan's job
 // (core/planner.ts) and the service worker's orchestration (background/service-worker.ts).
+import { findEmptyRequired, findMissingFields } from '../core/drift';
 import { executeStep } from './executeStep';
 import type { BackgroundToContentMessage, ContentToBackgroundMessage } from '../shared/messages';
 
@@ -14,7 +15,29 @@ export function initContentScript(): void {
   // service-worker.ts's own broadcast() swallowing its send failures.
   void chrome.runtime.sendMessage(ready).catch(() => {});
 
-  chrome.runtime.onMessage.addListener((message: BackgroundToContentMessage) => {
+  chrome.runtime.onMessage.addListener((message: BackgroundToContentMessage, _sender, sendResponse) => {
+    if (message.type === 'CHECK_PAGE') {
+      sendResponse({ missing: findMissingFields((id) => document.getElementById(id) !== null) });
+      return;
+    }
+    if (message.type === 'HIGHLIGHT_REQUIRED') {
+      const empty = findEmptyRequired((id, kind) => {
+        const el = document.getElementById(id);
+        if (!el) {
+          return false;
+        }
+        if (kind === 'file') {
+          return ((el as HTMLInputElement).files?.length ?? 0) === 0;
+        }
+        const v = (el as HTMLInputElement).value;
+        return v === '' || v === '0';
+      });
+      for (const id of empty) {
+        document.getElementById(id)?.style.setProperty('outline', '2px solid #d93025');
+      }
+      sendResponse({ empty });
+      return;
+    }
     if (message.type !== 'RUN_STEP') {
       return;
     }

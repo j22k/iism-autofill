@@ -4,6 +4,7 @@ import { EDITABLE_FIELDS, getByPath, groupFieldsBySection, setByPath, type Field
 import { labelForPath } from '../core/labels';
 import { createEmptyProfile, mergeProfile } from '../core/profile';
 import { validateProfile } from '../core/profileValidation';
+import { exportProfile, parseProfileImport } from '../core/profileIO';
 import { clearAll, loadProfile, saveProfile } from '../shared/storage';
 
 const AUTOSAVE_DEBOUNCE_MS = 500;
@@ -32,6 +33,46 @@ export async function initOptionsPage(root: HTMLElement): Promise<void> {
 
     root.appendChild(fieldset);
   }
+
+  // A5: backup/restore of the text profile (documents are not included).
+  const exportButton = document.createElement('button');
+  exportButton.type = 'button';
+  exportButton.dataset.action = 'export';
+  exportButton.textContent = 'Export profile';
+  exportButton.addEventListener('click', () => {
+    const url = URL.createObjectURL(new Blob([exportProfile(profile)], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'iism-profile.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+  root.appendChild(exportButton);
+
+  const importInput = document.createElement('input');
+  importInput.type = 'file';
+  importInput.accept = 'application/json,.json';
+  importInput.dataset.action = 'import';
+  importInput.setAttribute('aria-label', 'Import profile');
+  const importMessage = document.createElement('span');
+  importMessage.setAttribute('role', 'status');
+  importInput.addEventListener('change', () => {
+    const file = importInput.files?.[0];
+    if (!file) {
+      return;
+    }
+    void file.text().then(async (text) => {
+      const result = parseProfileImport(text);
+      if (!result.ok) {
+        importMessage.textContent = result.error;
+        return;
+      }
+      await saveProfile(result.profile);
+      await initOptionsPage(root);
+    });
+  });
+  root.appendChild(importInput);
+  root.appendChild(importMessage);
 
   const clearButton = document.createElement('button');
   clearButton.type = 'button';
