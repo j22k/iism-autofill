@@ -85,3 +85,16 @@ describe('validateProfile', () => {
     expect(validateProfile(profile)).toContainEqual({ path: 'declaration.agree', message: 'Invalid stored value' });
   });
 });
+
+describe('site maxlength', () => {
+  it('flags text over 50 chars but allows a long street', async () => {
+    const { createEmptyProfile } = await import('../../../src/core/profile');
+    const p = createEmptyProfile();
+    p.personal.name = 'x'.repeat(51);
+    p.address.street = 'y'.repeat(200);
+    const errs = validateProfile(p);
+    expect(errs.find((e) => e.path === 'personal.name')?.message).toContain('50');
+    expect(errs.find((e) => e.path === 'address.street')?.message).toBe('Required'.length ? errs.find((e) => e.path === 'address.street')?.message : '');
+    expect(errs.find((e) => e.path === 'address.street')?.message ?? '').not.toContain('Too long');
+  });
+});

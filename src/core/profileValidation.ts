@@ -15,6 +15,13 @@ const FORMAT_VALIDATORS: Record<string, (value: string) => string | null> = {
   'personal.dob': (value) => (isValidDob(value) ? null : 'Enter a valid date'),
 };
 
+// The site's own maxlength per text box (verified against tests/fixtures/admission.html):
+// 50 for every free-text box except street (250). Phones/pincode/DOB have their own
+// format validators above (a pasted "+91 98765-43210" is fine - it normalizes).
+const MAX_LENGTH_DEFAULT = 50;
+const MAX_LENGTH_OVERRIDES: Record<string, number> = { 'address.street': 250 };
+const SKIP_LENGTH_CHECK = new Set(['contact.mobile', 'emergency.phone', 'address.pincode', 'personal.dob', 'contact.email']);
+
 // Reuses FIELD_MAP as the single source of truth for which Profile paths are editable
 // and required, so this can never drift from the site's own field map. File/readonly
 // entries are the site's upload fields and computed display fields, not Profile text
@@ -60,6 +67,13 @@ export function validateProfile(profile: Profile): FieldError[] {
     }
     if (value === '') {
       continue;
+    }
+    if (def.kind === 'text' && !SKIP_LENGTH_CHECK.has(def.source)) {
+      const max = MAX_LENGTH_OVERRIDES[def.source] ?? MAX_LENGTH_DEFAULT;
+      if (value.length > max) {
+        errors.push({ path: def.source, message: `Too long - the site allows at most ${max} characters (you have ${value.length})` });
+        continue;
+      }
     }
     const message = FORMAT_VALIDATORS[def.source]?.(value) ?? null;
     if (message !== null) {
