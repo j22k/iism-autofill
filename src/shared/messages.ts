@@ -57,6 +57,8 @@ export interface HighlightRequiredMessage {
 export interface PageCheckResponse {
   missing?: string[];
   empty?: string[];
+  // The site's own age/DOB error text (lblDOBMsg), e.g. "Age Allow 0 To 0 Years".
+  dobMessage?: string;
 }
 
 export type BackgroundToContentMessage = RunStepMessage | CheckPageMessage | HighlightRequiredMessage;

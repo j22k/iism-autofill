@@ -35,7 +35,8 @@ export function initContentScript(): void {
       for (const id of empty) {
         document.getElementById(id)?.style.setProperty('outline', '2px solid #d93025');
       }
-      sendResponse({ empty });
+      const dobMessage = document.getElementById('lblDOBMsg')?.textContent?.trim() ?? '';
+      sendResponse({ empty, ...(dobMessage ? { dobMessage } : {}) });
       return;
     }
     if (message.type !== 'RUN_STEP') {

@@ -260,6 +260,9 @@ export async function initSidePanel(root: HTMLElement): Promise<void> {
       }
       const msg: HighlightRequiredMessage = { type: 'HIGHLIGHT_REQUIRED' };
       const res = (await chrome.tabs.sendMessage(tab.id, msg)) as PageCheckResponse | undefined;
+      if (res?.dobMessage) {
+        fillStatus.textContent += ` Site says about date of birth: "${res.dobMessage}" - check that Course, Level and Batch were all selected.`;
+      }
       if (res?.empty && res.empty.length > 0) {
         fillStatus.textContent += ` Still empty (outlined in red): ${res.empty.map(labelForStepId).join(', ')}.`;
       }
