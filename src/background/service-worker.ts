@@ -9,7 +9,7 @@
 // came from memory or was just read back from storage.
 import { isAdmissionUrl } from '../core/pageDetect';
 import { extensionForMimeType } from '../core/image';
-import { buildPlan, preflight, type FillStep } from '../core/planner';
+import { buildPlan, GUARDIAN_DOC, preflight, SIGNATURE_DOC, type FillStep } from '../core/planner';
 import { reduceRun, startRun, type RunEffect, type RunEvent, type RunState } from '../core/fillRun';
 import { resolveStepValue } from '../core/resolveStepValue';
 import type { Profile } from '../core/profile';
@@ -59,7 +59,8 @@ async function buildRunStepMessage(
   if (step.kind !== 'file') {
     return { type: 'RUN_STEP', id: step.id, kind: step.kind, value: resolveStepValue(profile, step) };
   }
-  const blob = await getDocFn(step.source);
+  const blob =
+    (await getDocFn(step.source)) ?? (step.source === GUARDIAN_DOC ? await getDocFn(SIGNATURE_DOC) : null);
   if (!blob) {
     // Shouldn't happen — buildPlan only emits a file step when availableDocs already
     // has it — but if the doc vanished between planning and sending (e.g. "Clear all

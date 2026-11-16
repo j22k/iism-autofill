@@ -21,7 +21,16 @@ function isEmpty(value: unknown): boolean {
 // Required file fields (notably FupParentGuardianSignature, which docs/04-field-map.md
 // says the site demands "even for adults") are checked the same way regardless of the
 // profile's DOB — there is deliberately no age-based exemption anywhere in here.
-export function preflight(profile: Profile, availableDocs: ReadonlySet<string>): PreflightResult {
+// B6: the site demands a guardian signature even for adults; when only the applicant's
+// signature is stored, that same file is reused for the guardian slot.
+export const GUARDIAN_DOC = 'docs.guardianSignature';
+export const SIGNATURE_DOC = 'docs.signature';
+function withDerivedDocs(docs: ReadonlySet<string>): ReadonlySet<string> {
+  return docs.has(GUARDIAN_DOC) || !docs.has(SIGNATURE_DOC) ? docs : new Set([...docs, GUARDIAN_DOC]);
+}
+
+export function preflight(profile: Profile, rawDocs: ReadonlySet<string>): PreflightResult {
+  const availableDocs = withDerivedDocs(rawDocs);
   const missingFields: string[] = [];
   const missingDocs: string[] = [];
 
@@ -78,7 +87,8 @@ for (const id of COURSE_SEQUENCE) {
 // value — it does not implement docs/03-architecture.md's "skip if already correct"
 // idempotency decision. That's deferred entirely to the DOM executor (T-030/T-032),
 // which does see page state.
-export function buildPlan(profile: Profile, availableDocs: ReadonlySet<string>): FillStep[] {
+export function buildPlan(profile: Profile, rawDocs: ReadonlySet<string>): FillStep[] {
+  const availableDocs = withDerivedDocs(rawDocs);
   const steps: FillStep[] = [];
 
   function addFieldStep(id: string): boolean {

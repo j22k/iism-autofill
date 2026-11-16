@@ -90,6 +90,7 @@ describe('preflight', () => {
     adultProfile.personal.dob = '1990-01-01'; // clearly an adult
     const docs = new Set(REQUIRED_DOCS);
     docs.delete('docs.guardianSignature');
+    docs.delete('docs.signature'); // B6: the applicant signature would otherwise stand in
 
     const result = preflight(adultProfile, docs);
 
@@ -165,5 +166,15 @@ describe('buildPlan', () => {
   it('never includes a readonly field as a step', () => {
     const steps = buildPlan(completeProfile(), ALL_DOCS);
     expect(steps.some((step) => step.kind === 'readonly')).toBe(false);
+  });
+});
+
+describe('guardian signature reuse (B6)', () => {
+  it('treats the applicant signature as satisfying the guardian slot', async () => {
+    const { createEmptyProfile } = await import('../../../src/core/profile');
+    const docs = new Set(['docs.signature']);
+    const pre = preflight(createEmptyProfile(), docs);
+    expect(pre.missingDocs).not.toContain('FupParentGuardianSignature');
+    expect(buildPlan(createEmptyProfile(), docs).map((s) => s.id)).toContain('FupParentGuardianSignature');
   });
 });
