@@ -19,7 +19,7 @@
     "@playwright/test": "^1.49.1",
     "@types/chrome": "^0.0.287",
     "@types/jsdom": "^30.0.0",
-    "@types/node": "^22.10.2",
+    "@types/node": "^26.6.6",
     "@typescript-eslint/eslint-plugin": "^8.18.1",
     "@typescript-eslint/parser": "^8.18.1",
     "@vitest/coverage-v8": "^5.1.0",
