@@ -8,17 +8,31 @@
     <link rel="stylesheet" href="./options.css" />
   </head>
   <body>
-    <header class="page">
-      <div class="brand">
-        <div class="logo">I</div>
-        <div><h1>IISM Form Filler</h1><small>Your data stays on this device</small></div>
+    <header class="hero inverse">
+      <div class="wrap">
+        <div class="brand">
+          <div class="logo">I</div>
+          <div><h1>IISM Form Filler</h1><small>Personal autofill for the admission form</small></div>
+        </div>
+        <h2 class="display">Fill it in once. Autofill the rest.</h2>
+        <p>Your details are saved on this device. The extension fills the admission form; you review it and press Submit yourself.</p>
+        <div class="pledges"><span>Stays on this device</span><span>Never submits for you</span><span>No network calls</span></div>
       </div>
-      <p>Fill this in once. The extension autofills the admission form; you review it and press Submit yourself.</p>
     </header>
-    <h2 class="section-title">Profile</h2>
-    <div id="app"></div>
-    <h2 class="section-title">Documents — up to 500 KB each (larger photos are shrunk automatically)</h2>
-    <div id="documents"></div>
+    <section class="band">
+      <div class="wrap">
+        <h2 class="section-title">Your profile</h2>
+        <p class="lede">Course, level, batch and state are matched against the site's own option text, so type them the way the site shows them.</p>
+        <div id="app"></div>
+      </div>
+    </section>
+    <section class="band alt">
+      <div class="wrap">
+        <h2 class="section-title">Documents</h2>
+        <p class="lede">Up to 500 KB each. Larger photos are shrunk automatically. Your own signature is reused for the guardian slot if you skip it.</p>
+        <div id="documents"></div>
+      </div>
+    </section>
     <script type="module" src="./main.ts"></script>
     <script type="module" src="./documents.ts"></script>
   </body>
