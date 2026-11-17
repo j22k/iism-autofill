@@ -36,5 +36,11 @@
   },
   "dependencies": {
     "@fontsource-variable/host-grotesk": "^5.3.0"
-  }
+  },
+  "license": "MIT",
+  "keywords": [
+    "chrome-extension",
+    "manifest-v3",
+    "autofill"
+  ]
 }
