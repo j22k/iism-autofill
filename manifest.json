@@ -22,11 +22,13 @@
   "options_page": "options/index.html",
   "icons": {
     "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "IISM Form Filler"
+    "default_title": "IISM Form Filler",
+    "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png" }
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
