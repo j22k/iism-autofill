@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initOptionsPage } from '../../../src/options/main';
 import { EDITABLE_FIELDS } from '../../../src/core/fieldMap';
+import { SITE_OPTIONS } from '../../../src/core/siteOptions';
 import type { Profile } from '../../../src/core/profile';
 
 function createChromeStorageMock() {
@@ -58,10 +59,11 @@ describe('initOptionsPage', () => {
     expect(root().querySelector('input[data-path="declaration.agree"]')?.getAttribute('type')).toBe('checkbox');
   });
 
-  it('renders a select-kind field (e.g. course.type) as a plain text input, never a guessed <select>', async () => {
+  it('renders a select-kind field (e.g. course.type) keeps a text input, and only gets a <select> from captured SITE_OPTIONS', async () => {
     await initOptionsPage(root());
     expect(root().querySelector('input[data-path="course.type"]')?.getAttribute('type')).toBe('text');
-    expect(root().querySelector('select')).toBeNull();
+    const selects = [...root().querySelectorAll('select')].map((el) => el.dataset.selectFor);
+    expect(selects.sort()).toEqual(Object.keys(SITE_OPTIONS).sort());
   });
 
   it('renders exactly one input per editable field — no file/readonly fields sneak in', async () => {
@@ -227,5 +229,20 @@ describe('date picker and explicit save', () => {
     const stored = (await chromeMock.storage.local.get('profile')) as { profile: Profile };
     expect(stored.profile.personal.name).toBe('Saved Now');
     expect(root().querySelector('[data-role="save-status"]')?.textContent).toContain('need attention');
+  });
+});
+
+describe('site option dropdowns', () => {
+  it('picking a course level fills the profile; Other reveals the text box', async () => {
+    await initOptionsPage(root());
+    const select = root().querySelector<HTMLSelectElement>('select[data-select-for="course.level"]') as HTMLSelectElement;
+    const input = root().querySelector<HTMLInputElement>('input[data-path="course.level"]') as HTMLInputElement;
+    expect(input.hidden).toBe(true);
+    select.value = 'Basic SSC';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(input.value).toBe('Basic SSC');
+    select.value = '__other__';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(input.hidden).toBe(false);
   });
 });

@@ -2,6 +2,7 @@
 // upload UI (B1-B3) is a separate module, added in T-022.
 import { EDITABLE_FIELDS, getByPath, groupFieldsBySection, setByPath, type FieldDef } from '../core/fieldMap';
 import { isoToFormDate } from '../core/dateFormat';
+import { SITE_OPTIONS } from '../core/siteOptions';
 import { labelForPath } from '../core/labels';
 import { createEmptyProfile, mergeProfile } from '../core/profile';
 import { validateProfile } from '../core/profileValidation';
@@ -197,6 +198,42 @@ export async function initOptionsPage(root: HTMLElement): Promise<void> {
     }
     if (!wrapper.contains(input)) {
       wrapper.appendChild(input);
+    }
+
+    // Site-known options (core/siteOptions.ts): a dropdown drives the text input, which stays
+    // the single source of truth (and the "Other" fallback for anything not listed).
+    const known = SITE_OPTIONS[path];
+    if (known && input.type === 'text') {
+      const select = document.createElement('select');
+      select.dataset.selectFor = path;
+      select.setAttribute('aria-label', labelForPath(path));
+      const OTHER = '__other__';
+      const addOption = (value: string, text: string): void => {
+        const o = document.createElement('option');
+        o.value = value;
+        o.textContent = text;
+        select.appendChild(o);
+      };
+      addOption('', 'Select...');
+      for (const name of known) {
+        addOption(name, name);
+      }
+      addOption(OTHER, 'Other (type it)');
+      const sync = (): void => {
+        const v = input.value;
+        select.value = v === '' ? '' : known.includes(v) ? v : OTHER;
+        input.hidden = select.value !== OTHER;
+      };
+      select.addEventListener('change', () => {
+        input.value = select.value === OTHER ? (known.includes(input.value) ? '' : input.value) : select.value;
+        input.hidden = select.value !== OTHER;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        if (select.value === OTHER) {
+          input.focus();
+        }
+      });
+      sync();
+      wrapper.insertBefore(select, input);
     }
 
     const errorEl = document.createElement('span');

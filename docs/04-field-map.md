@@ -67,3 +67,10 @@ Site: ASP.NET WebForms. IDs below are exact (including misspellings). **No `ctl0
 - Buttons: `btnSubmit` (validation group `sv`) and **`btnReset` — also a submit-type button that posts back**. Our Reset must NOT click it blindly; prefer re-navigating to the same URL (GET) or clearing fields client-side. Treat both buttons as forbidden to click automatically.
 - Hidden state fields: `__VIEWSTATE`, `__EVENTVALIDATION`, `hdf*` (e.g. `hdfFupBirthCertificate` = "No"/"Yes"). Never edit hidden fields. Setting the file input and firing `change` is what the page expects.
 - Because EVENTVALIDATION is enforced, dropdown values must be real option values (never invented).
+
+## Live option capture (T-001b) - 2026-11-17
+Captured from the live form (Snow Skiing Courses at Gulmarg selected): levels Basic SSC / Intermediate SSC / Advance SSC /
+Snow Boarding; six schedules (1st course 20 Dec 2026 ... 6th course 28 Feb-13 Mar 2027); full state list; ddlCourse had
+Gulmarg skiing and Gulmarg MOI only (Kargil absent). Also seen: hidden `hdfMinimumAge`=10, `hdfMaximumAge`=40,
+`hdfAgeCountDate`, read-only `txtAvailableSeat`/`txtCourseFee`. Lists live in `src/core/siteOptions.ts` (picker only; the fill
+always matches against the live page's options). Levels/schedules vary by course and season - the picker has an "Other" fallback.

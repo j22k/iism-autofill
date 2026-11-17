@@ -32,7 +32,7 @@ Format: `- [ ] T-ID title — acceptance criteria`. Tick when `npm run verify` i
 - [x] T-035 E2E: full happy path on fixture; asserts `btnSubmit` never clicked and no external network. — DONE 2026-11-16: tests/e2e/happy-path.spec.ts loads dist/ in Chromium, fills the fixture end-to-end (set CHROMIUM_PATH if the Playwright browser version mismatches); no btnSubmit post, no external requests.
 
 ## Phase 4 — Hardening & P1
-- [ ] T-040 Real-form manual smoke test (docs/05-test-plan.md); record findings as new tasks here.
+- [ ] T-001b DONE 2026-11-17 (options captured, see docs/04-field-map.md). T-040 Real-form manual smoke test (docs/05-test-plan.md); record findings as new tasks here.
 - [ ] T-041 Multiple profiles (A4) — NOT DONE: documents are stored once (not per profile), so real multi-person support needs per-profile doc keys; use Export/Import meanwhile.
 - [x] T-042 Export/import (A5) · T-043 Completeness meter (A6) — DONE 2026-11-16 (profile JSON only; docs not included).
 - [x] T-044 Dry-run (C9) preview button, re-fill failed (C10) = Autofill is idempotent so clicking again retries only what's wrong, required-field highlight (C13) — DONE 2026-11-16.
